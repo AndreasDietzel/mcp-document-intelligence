@@ -187,10 +187,10 @@ MIT License - see [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Built with [Model Context Protocol SDK](https://github.com/modelcontextprotocol)
-- Filesystem foundation from [MCP Servers](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)
+- Inspired by and based on concepts from [MCP Filesystem Server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)
 - PDF parsing by [pdf-parse](https://www.npmjs.com/package/pdf-parse)
 - OCR by [Tesseract.js](https://tesseract.projectnaptha.com/)
-- Weather data from [Open-Meteo](https://open-meteo.com/)
+
 ---
 
 **Made for intelligent document workflows** 📄✨
