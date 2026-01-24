@@ -13,7 +13,7 @@ function runAppleScript(script: string): string {
   try {
     const result = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, {
       encoding: "utf-8",
-      timeout: 10000,
+      timeout: 30000,
       stdio: ["pipe", "pipe", "pipe"],
     });
     return result.trim();
@@ -63,30 +63,27 @@ function getDateRange(timeframe: string): { startDate: Date; endDate: Date } {
   }
 }
 
-// FIX 1: Wetter mit wttr.in statt Weather.app
+// FIX 1: Wetter mit curl und längerem Timeout
 async function getWeather(): Promise<string> {
   try {
-    const https = await import('https');
-    return new Promise<string>((resolve) => {
-      const timeout = setTimeout(() => resolve("Wetter nicht verfügbar"), 3000);
-      https.get('https://wttr.in/?format=%l:+%C+%t+(H:+%h+L:+%l)', (res) => {
-        let data = '';
-        res.on('data', (chunk) => data += chunk.toString());
-        res.on('end', () => {
-          clearTimeout(timeout);
-          resolve(data.trim().replace(/not found/g, 'N/A') || "Wetter nicht verfügbar");
-        });
-      }).on('error', () => {
-        clearTimeout(timeout);
-        resolve("Wetter nicht verfügbar");
-      });
-    });
+    // Versuche wttr.in mit curl (10s timeout)
+    const result = execSync(
+      'curl -s --max-time 10 "https://wttr.in/?format=%l:+%C+%t" 2>/dev/null || echo ""',
+      { encoding: "utf-8", timeout: 12000 }
+    );
+    const weather = result.trim();
+    if (weather && !weather.includes('not found')) {
+      return weather;
+    }
+    
+    // Fallback: Einfache Meldung
+    return "Wetter: Daten aktuell nicht verfügbar";
   } catch (error) {
-    return "Wetter nicht verfügbar";
+    return "Wetter: Daten aktuell nicht verfügbar";
   }
 }
 
-// FIX 2: Kalender mit current date statt JS Date String
+// FIX 2: Kalender - Optimiert, nur ERSTE Kalender, nur HEUTE
 async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string> {
   const script = `
     set output to ""
@@ -95,29 +92,21 @@ async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string
     set todayEnd to todayStart + (1 * days)
     
     tell application "Calendar"
-      set allCalendars to calendars
-      set calCount to count of allCalendars
-      if calCount > 3 then set calCount to 3
-      
-      repeat with i from 1 to calCount
-        try
-          set cal to item i of allCalendars
-          set theEvents to (every event of cal)
-          repeat with evt in theEvents
-            try
-              set evtStart to start date of evt
-              if evtStart >= todayStart and evtStart < todayEnd then
-                set evtName to summary of evt
-                set evtLoc to ""
-                try
-                  set evtLoc to location of evt
-                end try
-                set output to output & evtName & " | " & (evtStart as string) & " | " & evtLoc & linefeed
-              end if
-            end try
-          end repeat
-        end try
-      end repeat
+      try
+        -- Nur ERSTEN Kalender verwenden für Geschwindigkeit
+        set cal to calendar 1
+        set allEvents to (every event of cal)
+        
+        repeat with evt in allEvents
+          try
+            set evtStart to start date of evt
+            if evtStart >= todayStart and evtStart < todayEnd then
+              set evtName to summary of evt
+              set output to output & evtName & linefeed
+            end if
+          end try
+        end repeat
+      end try
     end tell
     
     if output is "" then
@@ -129,20 +118,17 @@ async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string
   return runAppleScript(script);
 }
 
-// FIX 3: Erinnerungen mit current date
+// FIX 3: Erinnerungen - Nur ERSTE Liste, optimiert
 async function getReminders(): Promise<string> {
   const script = `
+    set output to ""
     set todayStart to current date
     set time of todayStart to 0
     set todayEnd to todayStart + (1 * days)
-    set output to ""
     
     tell application "Reminders"
       try
-        set allLists to every list
-        if (count of allLists) = 0 then return "Keine Listen gefunden"
-        
-        set firstList to item 1 of allLists
+        set firstList to list 1
         set allReminders to (every reminder of firstList whose completed is false)
         
         repeat with rem in allReminders
@@ -159,10 +145,10 @@ async function getReminders(): Promise<string> {
         if output is "" then
           return "Keine heute fälligen Erinnerungen"
         else
-          return "Heute fällig:" & linefeed & output
+          return output
         end if
-      on error errMsg
-        return "Fehler: " & errMsg
+      on error
+        return "Keine Erinnerungen verfügbar"
       end try
     end tell
   `;
