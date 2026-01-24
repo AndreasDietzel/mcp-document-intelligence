@@ -95,20 +95,39 @@ async function getReminders(): Promise<string> {
   const script = `
     set output to ""
     tell application "Reminders"
-      set allLists to every list
-      repeat with lst in allLists
-        set incompleteReminders to (every reminder of lst whose completed is false)
+      try
+        -- Nur die erste Liste abfragen (vermeidet Timeout bei vielen Listen)
+        set allLists to every list
+        if (count of allLists) = 0 then
+          return "Keine Reminders-Listen gefunden"
+        end if
+        
+        set firstList to item 1 of allLists
+        set listName to name of firstList
+        set incompleteReminders to (every reminder of firstList whose completed is false)
+        
+        if (count of incompleteReminders) = 0 then
+          return "Keine offenen Erinnerungen in '" & listName & "'"
+        end if
+        
+        set output to "Liste: " & listName & return & return
+        
         repeat with rem in incompleteReminders
-          set remName to name of rem
-          set remDueDate to due date of rem
-          if remDueDate is not missing value then
-            set output to output & remName & " | Fällig: " & (remDueDate as string) & linefeed
-          else
-            set output to output & remName & " | Kein Fälligkeitsdatum" & linefeed
-          end if
+          try
+            set remName to name of rem
+            set remDueDate to due date of rem
+            if remDueDate is not missing value then
+              set output to output & "• " & remName & " | Fällig: " & (remDueDate as string) & return
+            else
+              set output to output & "• " & remName & " | Kein Fälligkeitsdatum" & return
+            end if
+          end try
         end repeat
-      end repeat
+      on error errMsg
+        return "Fehler beim Abrufen der Erinnerungen: " & errMsg
+      end try
     end tell
+    
     return output
   `;
 
