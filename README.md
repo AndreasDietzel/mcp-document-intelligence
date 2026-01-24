@@ -1,10 +1,10 @@
-# Briefing MCP Server
+# Perplexity Briefing MCP Server
 
-Ein Model Context Protocol (MCP) Server, der personalisierte Briefings aus verschiedenen Mac-Diensten erstellt.
+Ein Model Context Protocol (MCP) Server für **Perplexity** und andere MCP-Clients, der personalisierte Briefings aus verschiedenen Mac-Datenquellen erstellt.
 
 ## 🎯 Ziel
 
-Dem Perplexity Client eine umfassende Zusammenfassung aus verschiedenen Quellen bereitzustellen:
+Perplexity (und anderen MCP-fähigen AI-Clients) eine umfassende Zusammenfassung aus lokalen Mac-Datenquellen bereitzustellen:
 - 📅 Kalender (Calendar.app)
 - ✅ Erinnerungen (Reminders.app)
 - 📧 Mail (ungelesen, wichtig)
@@ -29,9 +29,9 @@ npm install
 npm run build
 ```
 
-## 🚀 Verwendung mit Claude Desktop / Perplexity
+## 🚀 Verwendung mit Perplexity / Claude Desktop
 
-Konfiguration in der MCP-Settings-Datei:
+Konfiguration in der MCP-Settings-Datei (sobald Perplexity MCP unterstützt):
 
 ```json
 {

@@ -1,7 +1,7 @@
 {
-  "name": "briefing-mcp-server",
+  "name": "perplexity-briefing-mcp-server",
   "version": "0.1.0",
-  "description": "MCP Server für personalisierte Briefings aus Mac-Diensten (Kalender, Erinnerungen, Mail, News)",
+  "description": "MCP Server für Perplexity: Erstellt personalisierte Briefings aus Mac-Datenquellen (Kalender, Erinnerungen, Mail, News)",
   "type": "module",
   "main": "build/index.js",
   "bin": {
