@@ -13,6 +13,7 @@ function runAppleScript(script: string): string {
   try {
     const result = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, {
       encoding: "utf-8",
+      timeout: 10000,
       stdio: ["pipe", "pipe", "pipe"],
     });
     return result.trim();
@@ -62,199 +63,241 @@ function getDateRange(timeframe: string): { startDate: Date; endDate: Date } {
   }
 }
 
-function formatDate(date: Date): string {
-  return date.toISOString().split("T")[0];
+// FIX 1: Wetter mit wttr.in statt Weather.app
+async function getWeather(): Promise<string> {
+  try {
+    const https = await import('https');
+    return new Promise<string>((resolve) => {
+      const timeout = setTimeout(() => resolve("Wetter nicht verfügbar"), 3000);
+      https.get('https://wttr.in/?format=%l:+%C+%t+(H:+%h+L:+%l)', (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk.toString());
+        res.on('end', () => {
+          clearTimeout(timeout);
+          resolve(data.trim().replace(/not found/g, 'N/A') || "Wetter nicht verfügbar");
+        });
+      }).on('error', () => {
+        clearTimeout(timeout);
+        resolve("Wetter nicht verfügbar");
+      });
+    });
+  } catch (error) {
+    return "Wetter nicht verfügbar";
+  }
 }
 
-// Tool-Implementierungen
+// FIX 2: Kalender mit current date statt JS Date String
 async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string> {
   const script = `
-    set startDate to date "${startDate.toDateString()}"
-    set endDate to date "${endDate.toDateString()}"
     set output to ""
+    set todayStart to current date
+    set time of todayStart to 0
+    set todayEnd to todayStart + (1 * days)
     
     tell application "Calendar"
-      -- Nur die ersten 3 Kalender für bessere Performance
-      set allCalendars to every calendar
-      set calendarCount to count of allCalendars
-      set maxCalendars to 3
-      if calendarCount < maxCalendars then set maxCalendars to calendarCount
+      set allCalendars to calendars
+      set calCount to count of allCalendars
+      if calCount > 3 then set calCount to 3
       
-      repeat with i from 1 to maxCalendars
-        set cal to item i of allCalendars
-        set events to (every event of cal whose start date ≥ startDate and start date < endDate)
-        repeat with evt in events
-          set eventName to summary of evt
-          set eventStart to start date of evt
-          set eventLocation to location of evt
-          set output to output & eventName & " | " & (eventStart as string) & " | " & eventLocation & linefeed
-        end repeat
+      repeat with i from 1 to calCount
+        try
+          set cal to item i of allCalendars
+          set theEvents to (every event of cal)
+          repeat with evt in theEvents
+            try
+              set evtStart to start date of evt
+              if evtStart >= todayStart and evtStart < todayEnd then
+                set evtName to summary of evt
+                set evtLoc to ""
+                try
+                  set evtLoc to location of evt
+                end try
+                set output to output & evtName & " | " & (evtStart as string) & " | " & evtLoc & linefeed
+              end if
+            end try
+          end repeat
+        end try
       end repeat
     end tell
-    return output
+    
+    if output is "" then
+      return "Keine Termine heute"
+    else
+      return output
+    end if
   `;
-
   return runAppleScript(script);
 }
 
+// FIX 3: Erinnerungen mit current date
 async function getReminders(): Promise<string> {
-  const today = new Date();
-  const todayStr = today.toDateString();
-  
   const script = `
+    set todayStart to current date
+    set time of todayStart to 0
+    set todayEnd to todayStart + (1 * days)
     set output to ""
-    set todayDate to date "${todayStr}"
-    set tomorrowDate to todayDate + (1 * days)
     
     tell application "Reminders"
       try
-        -- Nur die erste Liste abfragen
         set allLists to every list
-        if (count of allLists) = 0 then
-          return "Keine Reminders-Listen gefunden"
-        end if
+        if (count of allLists) = 0 then return "Keine Listen gefunden"
         
         set firstList to item 1 of allLists
-        set listName to name of firstList
+        set allReminders to (every reminder of firstList whose completed is false)
         
-        -- Nur offene Erinnerungen die heute fällig sind
-        set todayReminders to (every reminder of firstList whose completed is false and due date is not missing value and due date ≥ todayDate and due date < tomorrowDate)
-        
-        if (count of todayReminders) = 0 then
-          return "Keine heute fälligen Erinnerungen"
-        end if
-        
-        set output to "Heute fällig (" & listName & "):" & return & return
-        
-        repeat with rem in todayReminders
+        repeat with rem in allReminders
           try
-            set remName to name of rem
-            set remDueDate to due date of rem
-            set output to output & "• " & remName & " | " & (remDueDate as string) & return
+            set remDue to due date of rem
+            if remDue is not missing value then
+              if remDue >= todayStart and remDue < todayEnd then
+                set output to output & "• " & (name of rem) & linefeed
+              end if
+            end if
           end try
         end repeat
+        
+        if output is "" then
+          return "Keine heute fälligen Erinnerungen"
+        else
+          return "Heute fällig:" & linefeed & output
+        end if
       on error errMsg
         return "Fehler: " & errMsg
       end try
     end tell
-    
-    return output
   `;
-
   return runAppleScript(script);
 }
 
+// FIX 4: Mail mit korrigierter Syntax
 async function getUnreadMail(): Promise<string> {
   const script = `
-    set output to ""
     tell application "Mail"
-      -- Explizit nur Inbox, max 5 Mails
-      set inboxAccount to account 1
-      set inboxMailbox to mailbox "INBOX" of inboxAccount
-      set unreadMessages to (every message of inboxMailbox whose read status is false)
-      set msgCount to count of unreadMessages
+      set unreadMessages to {}
+      set flaggedMessages to {}
+      set recentMessages to {}
       
-      if msgCount = 0 then
-        return "Keine ungelesenen E-Mails"
+      -- Ungelesene Mails
+      set allUnread to (every message of inbox whose read status is false)
+      set unreadCount to count of allUnread
+      if unreadCount > 0 then
+        set maxUnread to 3
+        if unreadCount < maxUnread then set maxUnread to unreadCount
+        repeat with i from 1 to maxUnread
+          set msg to item i of allUnread
+          set end of unreadMessages to {subject:subject of msg, sender:sender of msg, dateReceived:date received of msg, isRead:false}
+        end repeat
       end if
       
-      repeat with msg in (items 1 thru (minimum of {msgCount, 5}) of unreadMessages)
-        set msgSubject to subject of msg
-        set msgSender to sender of msg
-        set msgDate to date received of msg
-        set output to output & msgSubject & " | Von: " & msgSender & " | " & (msgDate as string) & linefeed
-      end repeat
+      -- Markierte Mails
+      set allFlagged to (every message of inbox whose flagged status is true)
+      set flaggedCount to count of allFlagged
+      if flaggedCount > 0 then
+        set maxFlagged to 3
+        if flaggedCount < maxFlagged then set maxFlagged to flaggedCount
+        repeat with i from 1 to maxFlagged
+          set msg to item i of allFlagged
+          set end of flaggedMessages to {subject:subject of msg, sender:sender of msg, dateReceived:date received of msg, isRead:(read status of msg)}
+        end repeat
+      end if
+      
+      -- Letzte 3 Mails
+      set allMessages to (every message of inbox)
+      set totalCount to count of allMessages
+      if totalCount > 0 then
+        set maxRecent to 3
+        if totalCount < maxRecent then set maxRecent to totalCount
+        repeat with i from 1 to maxRecent
+          set msg to item i of allMessages
+          set end of recentMessages to {subject:subject of msg, sender:sender of msg, dateReceived:date received of msg, isRead:(read status of msg)}
+        end repeat
+      end if
+      
+      -- Formatiere Ausgabe
+      set output to ""
+      
+      if (count of unreadMessages) > 0 then
+        set output to output & "📧 UNGELESEN (" & unreadCount & "):" & linefeed
+        repeat with msg in unreadMessages
+          set output to output & "  • " & subject of msg & " (von " & sender of msg & ")" & linefeed
+        end repeat
+        set output to output & linefeed
+      end if
+      
+      if (count of flaggedMessages) > 0 then
+        set output to output & "⭐ MARKIERT (" & flaggedCount & "):" & linefeed
+        repeat with msg in flaggedMessages
+          set readStatus to ""
+          if not (isRead of msg) then set readStatus to " [UNGELESEN]"
+          set output to output & "  • " & subject of msg & " (von " & sender of msg & ")" & readStatus & linefeed
+        end repeat
+        set output to output & linefeed
+      end if
+      
+      if (count of recentMessages) > 0 then
+        set output to output & "📬 LETZTE MAILS:" & linefeed
+        repeat with msg in recentMessages
+          set readStatus to ""
+          if not (isRead of msg) then set readStatus to " [UNGELESEN]"
+          set output to output & "  • " & subject of msg & " (von " & sender of msg & ")" & readStatus & linefeed
+        end repeat
+      end if
+      
+      if output is "" then
+        return "Keine Mails in der Inbox"
+      else
+        return output
+      end if
     end tell
-    return output
   `;
-
   return runAppleScript(script);
 }
 
-async function getWeather(): Promise<string> {
-  const script = `
-    tell application "Weather"
-      try
-        set currentCity to name of current city
-        set currentTemp to current temperature
-        set currentCondition to condition of current city
-        set todayHigh to high temperature of item 1 of forecast
-        set todayLow to low temperature of item 1 of forecast
-        return currentCity & " | " & currentTemp & "°C | " & currentCondition & " | H: " & todayHigh & "°C L: " & todayLow & "°C"
-      on error
-        return "Wetter-App nicht verfügbar"
-      end try
-    end tell
-  `;
-  
-  return runAppleScript(script);
-}
-
-async function getNews(source: string = "tagesschau"): Promise<string> {
-  // Tagesschau RSS Feed abrufen
-  const tagesschauUrl = "https://www.tagesschau.de/xml/rss2/";
-  
+async function getNews(): Promise<string> {
   try {
-    const curlCommand = `curl -s "${tagesschauUrl}" | grep -E "<title>|<description>" | head -n 10 | sed 's/<[^>]*>//g' | sed 's/&amp;/\\&/g'`;
-    const result = execSync(curlCommand, { encoding: "utf-8" });
-    
-    const lines = result.split("\n").filter(l => l.trim());
-    let output = "";
-    
-    for (let i = 0; i < Math.min(lines.length, 6); i += 2) {
-      const title = lines[i]?.trim();
-      const desc = lines[i + 1]?.trim();
-      if (title && title !== "tagesschau.de - die erste Adresse für Nachrichten und umfassende Berichte") {
-        output += `• ${title}\n`;
-      }
-    }
-    
-    return output || "Keine aktuellen Nachrichten verfügbar";
+    const result = execSync(
+      `curl -s "https://www.tagesschau.de/xml/rss2/" | grep -o "<title>[^<]*</title>" | sed 's/<title>//;s|</title>||' | head -6 | tail -5`,
+      { encoding: "utf-8", timeout: 5000 }
+    );
+    return result.trim() || "Keine News verfügbar";
   } catch (error) {
-    return "Nachrichten konnten nicht abgerufen werden";
+    return "News nicht verfügbar";
   }
 }
 
-async function getBriefing(timeframe: string): Promise<string> {
+async function getBriefing(timeframe: string = "heute"): Promise<string> {
   const { startDate, endDate } = getDateRange(timeframe);
-  let briefing = `📋 BRIEFING FÜR ${timeframe.toUpperCase()} (${formatDate(startDate)} - ${formatDate(endDate)})\n\n`;
 
-  // Wetter
-  briefing += "🌤️ WETTER:\n";
-  const weather = await getWeather();
-  briefing += weather + "\n\n";
+  const [weather, calendar, reminders, mail, news] = await Promise.all([
+    getWeather(),
+    getCalendarEvents(startDate, endDate),
+    getReminders(),
+    getUnreadMail(),
+    getNews(),
+  ]);
 
-  // Kalender (nur 3 Hauptkalender)
-  briefing += "📅 KALENDER:\n";
-  const events = await getCalendarEvents(startDate, endDate);
-  briefing += events || "Keine Termine\n";
-  briefing += "\n";
+  return `
+🌤️  WETTER
+${weather}
 
-  // Erinnerungen (nur heute fällig)
-  briefing += "✅ HEUTE FÄLLIG:\n";
-  const reminders = await getReminders();
-  briefing += reminders || "Keine heute fälligen Erinnerungen\n";
-  briefing += "\n";
+📅 TERMINE (${timeframe})
+${calendar}
 
-  // E-Mails (nur Inbox, max 5)
-  briefing += "📧 UNGELESENE E-MAILS:\n";
-  const mail = await getUnreadMail();
-  briefing += mail || "Keine ungelesenen E-Mails\n";
-  briefing += "\n";
+✅ ERINNERUNGEN
+${reminders}
 
-  // News
-  briefing += "📰 NACHRICHTEN (Tagesschau):\n";
-  const news = await getNews();
-  briefing += news + "\n";
+📧 MAIL
+${mail}
 
-  return briefing;
+📰 NEWS
+${news}
+  `.trim();
 }
 
-// MCP Server Setup
 const server = new Server(
   {
-    name: "briefing-mcp-server",
-    version: "0.1.0",
+    name: "perplexity-mcp-briefing",
+    version: "1.0.0",
   },
   {
     capabilities: {
@@ -263,28 +306,31 @@ const server = new Server(
   }
 );
 
-// Tool Definitions
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
         name: "get_briefing",
-        description:
-          "Erstellt ein umfassendes Briefing mit Wetter, Kalender, Erinnerungen, E-Mails und Nachrichten. Optimiert für schnelle Performance.",
+        description: "Erstellt ein Briefing mit Wetter, Terminen, Erinnerungen, Mails und News",
         inputSchema: {
           type: "object",
           properties: {
             timeframe: {
               type: "string",
-              description: "Zeitraum für das Briefing: 'heute', 'wochenende', 'woche'",
+              description: "Zeitraum: 'heute', 'wochenende', 'woche'",
               default: "heute",
             },
           },
         },
       },
       {
+        name: "get_weather",
+        description: "Zeigt das aktuelle Wetter",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
         name: "get_calendar_events",
-        description: "Listet Kalendereinträge für einen Zeitraum (nur 3 Hauptkalender für Performance)",
+        description: "Zeigt Termine für einen Zeitraum",
         inputSchema: {
           type: "object",
           properties: {
@@ -298,47 +344,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "get_reminders",
-        description: "Zeigt heute fällige offene Erinnerungen",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
+        description: "Zeigt heute fällige Erinnerungen",
+        inputSchema: { type: "object", properties: {} },
       },
       {
         name: "get_unread_mail",
-        description: "Zeigt die letzten 5 ungelesenen E-Mails aus der Inbox",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
-      {
-        name: "get_weather",
-        description: "Zeigt aktuelles Wetter von der macOS Wetter-App",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
+        description: "Zeigt ungelesene, markierte und letzte Mails",
+        inputSchema: { type: "object", properties: {} },
       },
       {
         name: "get_news",
-        description: "Zeigt aktuelle Nachrichten von der Tagesschau (oder anderer Quelle)",
-        inputSchema: {
-          type: "object",
-          properties: {
-            source: {
-              type: "string",
-              description: "Nachrichtenquelle (default: 'tagesschau')",
-              default: "tagesschau",
-            },
-          },
-        },
+        description: "Zeigt aktuelle Nachrichten von Tagesschau",
+        inputSchema: { type: "object", properties: {} },
       },
     ],
   };
 });
 
-// Tool Execution
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: args } = request.params;
@@ -346,47 +368,46 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (name) {
       case "get_briefing": {
         const timeframe = (args?.timeframe as string) || "heute";
-        const result = await getBriefing(timeframe);
+        const briefing = await getBriefing(timeframe);
         return {
-          content: [{ type: "text", text: result }],
+          content: [{ type: "text", text: briefing }],
+        };
+      }
+
+      case "get_weather": {
+        const weather = await getWeather();
+        return {
+          content: [{ type: "text", text: weather }],
         };
       }
 
       case "get_calendar_events": {
         const timeframe = (args?.timeframe as string) || "heute";
         const { startDate, endDate } = getDateRange(timeframe);
-        const result = await getCalendarEvents(startDate, endDate);
+        const events = await getCalendarEvents(startDate, endDate);
         return {
-          content: [{ type: "text", text: result || "Keine Kalendereinträge gefunden" }],
+          content: [{ type: "text", text: events }],
         };
       }
 
       case "get_reminders": {
-        const result = await getReminders();
+        const reminders = await getReminders();
         return {
-          content: [{ type: "text", text: result || "Keine offenen Erinnerungen" }],
+          content: [{ type: "text", text: reminders }],
         };
       }
 
       case "get_unread_mail": {
-        const result = await getUnreadMail();
+        const mail = await getUnreadMail();
         return {
-          content: [{ type: "text", text: result || "Keine ungelesenen E-Mails" }],
-        };
-      }
-
-      case "get_weather": {
-        const result = await getWeather();
-        return {
-          content: [{ type: "text", text: result }],
+          content: [{ type: "text", text: mail }],
         };
       }
 
       case "get_news": {
-        const source = (args?.source as string) || "tagesschau";
-        const result = await getNews(source);
+        const news = await getNews();
         return {
-          content: [{ type: "text", text: result }],
+          content: [{ type: "text", text: news }],
         };
       }
 
@@ -401,14 +422,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-// Server starten
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Briefing MCP Server läuft");
+  console.error("Perplexity MCP Briefing Server läuft");
 }
 
-main().catch((error) => {
-  console.error("Server Error:", error);
-  process.exit(1);
-});
+main().catch(console.error);
