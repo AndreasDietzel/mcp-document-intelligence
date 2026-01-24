@@ -9,9 +9,11 @@ import {
 import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-const pdfParse = require("pdf-parse");
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
 import { createWorker } from "tesseract.js";
 
+const pdfParse = require("pdf-parse");
 // AppleScript Hilfsfunktion
 function runAppleScript(script: string): string {
   try {
