@@ -13,7 +13,7 @@ function runAppleScript(script: string): string {
   try {
     const result = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, {
       encoding: "utf-8",
-      timeout: 30000,
+      timeout: 60000, // Erhöht auf 60 Sekunden für große Kalender
       stdio: ["pipe", "pipe", "pipe"],
     });
     return result.trim();
@@ -251,19 +251,19 @@ async function getNews(): Promise<string> {
           return "📰 TOP 5 Nachrichten von heute:" + (newsText ? "\n" + newsText : "\nNicht verfügbar");
         }
       } catch (perplexityError) {
-        console.log("Perplexity API nicht verfügbar, fallback zu Tagesschau RSS");
+        console.log("Perplexity API nicht verfügbar, fallback zu T-Online RSS");
       }
     }
     
-    // Fallback: Tagesschau RSS
+    // Fallback: T-Online RSS
     const result = execSync(
-      `curl -s "https://www.tagesschau.de/xml/rss2/" | grep -o "<title>[^<]*</title>" | sed 's/<title>//;s|</title>||' | head -6 | tail -5`,
+      `curl -s "https://www.t-online.de/nachrichten/feed.rss" | grep -o "<title>[^<]*</title>" | sed 's/<title>//;s|</title>||' | head -7 | tail -5`,
       { encoding: "utf-8", timeout: 5000 }
     );
     
     const newsItems = result.trim().split("\n").filter(line => line.length > 0);
     if (newsItems.length > 0) {
-      return "📰 Nachrichten von Tagesschau:\n" + newsItems.map((item, i) => `${i + 1}. ${item}`).join("\n");
+      return "📰 Aktuelle Nachrichten (T-Online):\n" + newsItems.map((item, i) => `${i + 1}. ${item}`).join("\n");
     }
     
     return "📰 Keine News verfügbar";
