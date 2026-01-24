@@ -3,7 +3,7 @@
 ## 1. Installation
 
 ```bash
-cd /Users/andreasdietzel/Projects/briefing-mcp-server
+cd /path/to/your/briefing-mcp-server
 npm install
 npm run build
 ```
@@ -19,7 +19,7 @@ Füge in deiner MCP-Konfigurationsdatei hinzu:
   "mcpServers": {
     "briefing": {
       "command": "node",
-      "args": ["/Users/andreasdietzel/Projects/briefing-mcp-server/build/index.js"]
+      "args": ["/ABSOLUTE/PATH/TO/YOUR/briefing-mcp-server/build/index.js"]
     }
   }
 }

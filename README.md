@@ -38,7 +38,7 @@ Konfiguration in der MCP-Settings-Datei:
   "mcpServers": {
     "briefing": {
       "command": "node",
-      "args": ["/Users/andreasdietzel/Projects/briefing-mcp-server/build/index.js"]
+      "args": ["/ABSOLUTE/PATH/TO/YOUR/briefing-mcp-server/build/index.js"]
     }
   }
 }
