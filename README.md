@@ -126,7 +126,6 @@ analyze_pdf_and_suggest_filename with filePath: "/path/to/scanned_invoice.pdf"
 - **pdf-parse**: PDF text extraction
 - **tesseract.js**: OCR for scanned documents
 - **@modelcontextprotocol/sdk**: MCP protocol implementation
-- **Open-Meteo API**: Free weather data (no API key)
 
 ### File Structure
 ```

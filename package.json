@@ -27,6 +27,9 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "@types/adm-zip": "^0.5.7",
+    "adm-zip": "^0.5.16",
+    "mammoth": "^1.11.0",
     "pdf-parse": "^1.1.1",
     "tesseract.js": "^7.0.0"
   },
