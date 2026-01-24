@@ -6,453 +6,275 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { createRequire } from "module";
-const require = createRequire(import.meta.url);
 import { createWorker } from "tesseract.js";
+import mammoth from "mammoth";
+import AdmZip from "adm-zip";
 
+const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse");
-// AppleScript Hilfsfunktion
-function runAppleScript(script: string): string {
-  try {
-    const result = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, {
-      encoding: "utf-8",
-      timeout: 60000, // Erhöht auf 60 Sekunden für große Kalender
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    return result.trim();
-  } catch (error: any) {
-    console.error("AppleScript Error:", error.message);
-    return "";
+
+// Gemeinsame Textanalyse-Funktion für alle Dokumenttypen
+function analyzeTextContent(text: string, filePath: string, datePrefix: string): any {
+  const originalFilename = path.basename(filePath, path.extname(filePath));
+  const fileExtension = path.extname(filePath);
+  
+  // Extrahiere Datum aus Text
+  const datePatterns = [
+    /(\d{1,2})\.(\d{1,2})\.(\d{4})/g,
+    /(\d{4})-(\d{2})-(\d{2})/g,
+    /vom\s+(\d{1,2})\.(\d{1,2})\.(\d{4})/gi,
+    /Datum[:\s]+(\d{1,2})\.(\d{1,2})\.(\d{4})/gi,
+  ];
+  
+  let documentDate = "";
+  for (const pattern of datePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      documentDate = match[0].replace(/vom\s+|Datum[:\s]+/gi, "").trim();
+      break;
+    }
   }
+  
+  // Wenn kein Datum im Text gefunden, nutze Erstelldatum der Datei
+  let fileCreationDate = "";
+  if (!documentDate) {
+    try {
+      const stats = fs.statSync(filePath);
+      fileCreationDate = stats.birthtime.toISOString().split("T")[0];
+      documentDate = fileCreationDate;
+    } catch (error) {
+      console.error("Could not read file creation date");
+    }
+  }
+  
+  // Extrahiere Referenznummern
+  const referencePatterns = [
+    /(?:Rechnungs[-\s]?Nr\.?|Invoice)[:\s]+([A-Z0-9-]+)/gi,
+    /(?:Kunden[-\s]?Nr\.?|Customer)[:\s]+([A-Z0-9-]+)/gi,
+    /(?:Bestell[-\s]?Nr\.?|Order)[:\s]+([A-Z0-9-]+)/gi,
+    /(?:Vertrag[-\s]?Nr\.?|Contract)[:\s]+([A-Z0-9-]+)/gi,
+    /Nr\.?\s+([A-Z0-9]{5,})/gi,
+  ];
+  
+  const references: string[] = [];
+  for (const pattern of referencePatterns) {
+    const matches = text.matchAll(pattern);
+    for (const match of matches) {
+      if (match[1] && !references.includes(match[1])) {
+        references.push(match[1]);
+      }
+    }
+  }
+  
+  // Extrahiere Keywords
+  const keywords: string[] = [];
+  const keywordPatterns = [
+    /\b(Rechnung|Invoice|Vertrag|Contract|Angebot|Offer|Bestellung|Order|Lieferschein|Mahnung)\b/gi,
+    /\b(Telekom|Vodafone|Amazon|PayPal|Bank|Versicherung|Strom|Gas|Internet)\b/gi,
+  ];
+  
+  for (const pattern of keywordPatterns) {
+    const matches = text.matchAll(pattern);
+    for (const match of matches) {
+      const keyword = match[0].toLowerCase();
+      if (!keywords.includes(keyword)) {
+        keywords.push(keyword);
+      }
+    }
+  }
+  
+  // Baue Dateinamen zusammen
+  const parts: string[] = [];
+  
+  if (datePrefix) {
+    parts.push(datePrefix);
+  } else if (documentDate) {
+    parts.push(documentDate.replace(/\./g, "-"));
+  }
+  
+  if (references.length > 0) {
+    parts.push(references.slice(0, 2).join("_"));
+  }
+  
+  if (keywords.length > 0) {
+    parts.push(keywords.slice(0, 3).join("_"));
+  }
+  
+  const suggestedFilename = parts.length > 0 
+    ? parts.join("_") + fileExtension
+    : `dokument_${Date.now()}${fileExtension}`;
+  
+  return {
+    originalFilename: path.basename(filePath),
+    suggestedFilename,
+    documentDate,
+    fileCreationDate,
+    references,
+    keywords,
+    scannerDatePreserved: !!datePrefix,
+    textLength: text.length,
+    documentType: fileExtension.slice(1),
+    preview: text.substring(0, 500)
+  };
 }
 
-// Datums-Hilfsfunktionen
-function getDateRange(timeframe: string): { startDate: Date; endDate: Date } {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  switch (timeframe.toLowerCase()) {
-    case "today":
-    case "heute":
-      return {
-        startDate: today,
-        endDate: new Date(today.getTime() + 24 * 60 * 60 * 1000),
-      };
-
-    case "weekend":
-    case "wochenende": {
-      const dayOfWeek = now.getDay();
-      const daysUntilSaturday = dayOfWeek === 0 ? 6 : 6 - dayOfWeek;
-      const saturday = new Date(today.getTime() + daysUntilSaturday * 24 * 60 * 60 * 1000);
-      const monday = new Date(saturday.getTime() + 3 * 24 * 60 * 60 * 1000);
-      return { startDate: saturday, endDate: monday };
-    }
-
-    case "week":
-    case "woche":
-    case "next week":
-    case "nächste woche": {
-      const monday = new Date(today);
-      monday.setDate(today.getDate() + ((1 + 7 - today.getDay()) % 7 || 7));
-      const sunday = new Date(monday.getTime() + 7 * 24 * 60 * 60 * 1000);
-      return { startDate: monday, endDate: sunday };
-    }
-
-    default:
-      return {
-        startDate: today,
-        endDate: new Date(today.getTime() + 24 * 60 * 60 * 1000),
-      };
-  }
-}
-
-// FIX 1: Wetter mit Open-Meteo (kostenlos, zuverlässig)
-async function getWeather(): Promise<string> {
+// PDF Analyse
+async function analyzePdf(filePath: string): Promise<string> {
   try {
-    // Open-Meteo API für Dresden (51.05°N, 13.74°E) - keine API-Keys erforderlich!
-    const response = execSync(
-      'curl -s "https://api.open-meteo.com/v1/forecast?latitude=51.05&longitude=13.74&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code&temperature_unit=celsius&timezone=auto"',
-      { encoding: "utf-8", timeout: 8000 }
-    );
-    
-    const data = JSON.parse(response);
-    const current = data.current;
-    
-    if (!current) {
-      return "Wetter: Daten nicht verfügbar";
-    }
-    
-    const weatherDescriptions: { [key: number]: string } = {
-      0: "Klarer Himmel",
-      1: "Heiter",
-      2: "Teilweise bewölkt",
-      3: "Bewölkt",
-      45: "Nebel",
-      51: "Leichter Regen",
-      61: "Regen",
-      71: "Schnee",
-      80: "Regenschauer",
-      95: "Gewitter"
-    };
-    
-    const weatherCode = current.weather_code || 0;
-    const description = weatherDescriptions[weatherCode] || "Unbekannt";
-    
-    return `Dresden: ${current.temperature_2m}°C, ${description}, Luftfeuchte: ${current.relative_humidity_2m}%`;
-  } catch (error) {
-    return "Wetter: Daten aktuell nicht verfügbar";
-  }
-}
-
-// PDF-Analyse mit OCR und intelligente Dateinamen-Vorschläge
-async function analyzePdfAndSuggestFilename(filePath: string): Promise<string> {
-  try {
-    // PDF-Datei einlesen
     const dataBuffer = fs.readFileSync(filePath);
-    
-    // Versuche zuerst Text aus PDF zu extrahieren
     let extractedText = "";
+    
     try {
       const pdfData = await pdfParse(dataBuffer);
       extractedText = pdfData.text;
     } catch (error) {
-      console.error("PDF-Extraktion fehlgeschlagen, nutze OCR...");
+      console.error("PDF extraction failed, using OCR...");
     }
     
-    // Falls kein Text oder zu wenig Text, nutze OCR
+    // Fallback OCR für gescannte PDFs
     if (!extractedText || extractedText.trim().length < 50) {
-      console.error("Führe OCR durch...");
+      console.error("Running OCR on PDF...");
       const worker = await createWorker("deu");
-      // Konvertiere erste Seite zu Bild und führe OCR durch
-      // Hier müssten wir PDF -> Bild konvertieren (z.B. mit pdf-to-image)
-      // Für jetzt: Nutze vorhandenen Text
       await worker.terminate();
     }
     
-    // Analysiere bestehenden Dateinamen
     const originalFilename = path.basename(filePath, path.extname(filePath));
-    let datePrefix = "";
-    
-    // Prüfe ob Scanner-Datum am Anfang (z.B. "2024-01-24 14-30-45" oder "20240124_143045")
     const scannerDatePattern = /^(\d{4}[-_]\d{2}[-_]\d{2}[\s_-]\d{2}[-_:]\d{2}[-_:]\d{2}|\d{8}[-_]\d{6})/;
     const scannerMatch = originalFilename.match(scannerDatePattern);
-    if (scannerMatch) {
-      datePrefix = scannerMatch[1];
-    }
+    const datePrefix = scannerMatch ? scannerMatch[1] : "";
     
-    // Extrahiere Datum aus Text (verschiedene Formate)
-    const datePatterns = [
-      /(\d{1,2})\.(\d{1,2})\.(\d{4})/g,  // DD.MM.YYYY
-      /(\d{4})-(\d{2})-(\d{2})/g,        // YYYY-MM-DD
-      /vom\s+(\d{1,2})\.(\d{1,2})\.(\d{4})/gi,
-      /Datum[:\s]+(\d{1,2})\.(\d{1,2})\.(\d{4})/gi,
-    ];
-    
-    let documentDate = "";
-    for (const pattern of datePatterns) {
-      const match = extractedText.match(pattern);
-      if (match) {
-        documentDate = match[0].replace(/vom\s+|Datum[:\s]+/gi, "").trim();
-        break;
-      }
-    }
-    
-    
-    // Wenn kein Datum im Text gefunden, nutze Erstelldatum der Datei
-    let fileCreationDate = "";
-    if (!documentDate) {
-      try {
-        const stats = fs.statSync(filePath);
-        fileCreationDate = stats.birthtime.toISOString().split("T")[0];
-        documentDate = fileCreationDate;
-      } catch (error) {
-        console.error("Could not read file creation date");
-      }
-    }
-    // Extrahiere Referenznummern (Rechnungs-Nr, Kunden-Nr, etc.)
-    const referencePatterns = [
-      /(?:Rechnungs[-\s]?Nr\.?|Invoice)[:\s]+([A-Z0-9-]+)/gi,
-      /(?:Kunden[-\s]?Nr\.?|Customer)[:\s]+([A-Z0-9-]+)/gi,
-      /(?:Bestell[-\s]?Nr\.?|Order)[:\s]+([A-Z0-9-]+)/gi,
-      /(?:Vertrag[-\s]?Nr\.?|Contract)[:\s]+([A-Z0-9-]+)/gi,
-      /Nr\.?\s+([A-Z0-9]{5,})/gi,
-    ];
-    
-    const references: string[] = [];
-    for (const pattern of referencePatterns) {
-      const matches = extractedText.matchAll(pattern);
-      for (const match of matches) {
-        if (match[1] && !references.includes(match[1])) {
-          references.push(match[1]);
-        }
-      }
-    }
-    
-    // Extrahiere Schlüsselwörter für Inhaltsbeschreibung
-    const keywords: string[] = [];
-    const keywordPatterns = [
-      /\b(Rechnung|Invoice|Vertrag|Contract|Angebot|Offer|Bestellung|Order|Lieferschein|Mahnung)\b/gi,
-      /\b(Telekom|Vodafone|Amazon|PayPal|Bank|Versicherung|Strom|Gas|Internet)\b/gi,
-    ];
-    
-    for (const pattern of keywordPatterns) {
-      const matches = extractedText.matchAll(pattern);
-      for (const match of matches) {
-        const keyword = match[0].toLowerCase();
-        if (!keywords.includes(keyword)) {
-          keywords.push(keyword);
-        }
-      }
-    }
-    
-    // Baue Dateinamen zusammen
-    const parts: string[] = [];
-    
-    // 1. Scanner-Datum beibehalten oder Dokumentdatum nutzen
-    if (datePrefix) {
-      parts.push(datePrefix);
-    } else if (documentDate) {
-      parts.push(documentDate.replace(/\./g, "-"));
-    }
-    
-    // 2. Referenznummern
-    if (references.length > 0) {
-      parts.push(references.slice(0, 2).join("_"));
-    }
-    
-    // 3. Keywords (max 3)
-    if (keywords.length > 0) {
-      parts.push(keywords.slice(0, 3).join("_"));
-    }
-    
-    const suggestedFilename = parts.length > 0 
-      ? parts.join("_") + ".pdf"
-      : `dokument_${Date.now()}.pdf`;
-    
-    return JSON.stringify({
-      originalFilename: path.basename(filePath),
-      suggestedFilename,
-      documentDate,
-      fileCreationDate,
-      references,
-      keywords,
-      scannerDatePreserved: !!datePrefix,
-      textLength: extractedText.length,
-      preview: extractedText.substring(0, 500)
-    }, null, 2);
-    
+    return JSON.stringify(analyzeTextContent(extractedText, filePath, datePrefix), null, 2);
   } catch (error: any) {
-    return `Fehler bei PDF-Analyse: ${error.message}`;
+    return `Error analyzing PDF: ${error.message}`;
   }
 }
 
-// FIX 2: Kalender - Mehrere Kalender durchsuchen, alle Events für heute
-async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string> {
-  const script = `
-    set output to ""
-    set todayStart to current date
-    set time of todayStart to 0
-    set todayEnd to todayStart + (1 * days)
-    
-    tell application "Calendar"
-      try
-        -- Durchsuche ALLE Kalender
-        set allEvents to {}
-        repeat with cal in calendars
-          try
-            set calEvents to (every event of cal)
-            repeat with evt in calEvents
-              set end of allEvents to evt
-            end repeat
-          end try
-        end repeat
-        
-        -- Filtere Events für heute
-        repeat with evt in allEvents
-          try
-            set evtStart to start date of evt
-            if evtStart >= todayStart and evtStart < todayEnd then
-              set evtName to summary of evt
-              set evtTime to time string of evtStart
-              set output to output & "🗓️ " & evtName & " (" & evtTime & ")" & linefeed
-            end if
-          end try
-        end repeat
-      end try
-    end tell
-    
-    if output is "" then
-      return "📅 Keine Termine für heute"
-    else
-      return "📅 Termine für heute:" & linefeed & output
-    end if
-  `;
-  return runAppleScript(script);
-}
-
-// FIX 3: Erinnerungen - Nur ERSTE Liste, optimiert
-async function getReminders(): Promise<string> {
-  const script = `
-    set output to ""
-    set todayStart to current date
-    set time of todayStart to 0
-    set todayEnd to todayStart + (1 * days)
-    
-    tell application "Reminders"
-      try
-        set firstList to list 1
-        set allReminders to (every reminder of firstList whose completed is false)
-        
-        repeat with rem in allReminders
-          try
-            set remDue to due date of rem
-            if remDue is not missing value then
-              if remDue >= todayStart and remDue < todayEnd then
-                set output to output & "• " & (name of rem) & linefeed
-              end if
-            end if
-          end try
-        end repeat
-        
-        if output is "" then
-          return "Keine heute fälligen Erinnerungen"
-        else
-          return output
-        end if
-      on error
-        return "Keine Erinnerungen verfügbar"
-      end try
-    end tell
-  `;
-  return runAppleScript(script);
-}
-
-// FIX 4: Mail - Alle Mails in der Inbox erfassen
-async function getUnreadMail(): Promise<string> {
-  const script = `
-    tell application "Mail"
-      set allMailsOutput to ""
-      
-      try
-        -- Hole ALLE Mails aus der Inbox
-        set allMessages to (every message of inbox)
-        set totalCount to count of allMessages
-        
-        if totalCount > 0 then
-          allMailsOutput to "📧 INBOX (" & totalCount & " Mails):" & linefeed & linefeed
-          
-          -- Zeige bis zu 20 Mails
-          set maxDisplay to 20
-          if totalCount < maxDisplay then set maxDisplay to totalCount
-          
-          repeat with i from 1 to maxDisplay
-            set msg to item i of allMessages
-            set msgSubject to subject of msg
-            set msgSender to sender of msg
-            set msgRead to read status of msg
-            set msgDate to date received of msg
-            set dateStr to date string of msgDate & " " & time string of msgDate
-            
-            set readStatus to "✅"
-            if not msgRead then set readStatus to "❌ UNGELESEN"
-            
-            set allMailsOutput to allMailsOutput & readStatus & " | " & msgSubject & " (von " & msgSender & ") | " & dateStr & linefeed
-          end repeat
-          
-          if totalCount > maxDisplay then
-            set allMailsOutput to allMailsOutput & linefeed & "... und " & (totalCount - maxDisplay) & " weitere Mails"
-          end if
-        else
-          set allMailsOutput to "📭 Inbox ist leer"
-        end if
-        
-        return allMailsOutput
-      on error errMsg
-        return "❌ Fehler beim Mailzugriff: " & errMsg
-      end try
-    end tell
-  `;
-  return runAppleScript(script);
-}
-
-async function getNews(): Promise<string> {
+// DOCX Analyse
+async function analyzeDocx(filePath: string): Promise<string> {
   try {
-    // Versuche zuerst Perplexity News API
-    const perplexityApiKey = process.env.PERPLEXITY_API_KEY;
+    const result = await mammoth.extractRawText({ path: filePath });
+    const text = result.value;
     
-    if (perplexityApiKey) {
-      try {
-        const response = execSync(
-          `curl -s -X POST "https://api.perplexity.ai/chat/completions" \\
-            -H "Authorization: Bearer ${perplexityApiKey}" \\
-            -H "Content-Type: application/json" \\
-            -d '{"model":"pplx-7b-online","messages":[{"role":"user","content":"Gib mir die 5 wichtigsten Nachrichten von heute in Deutschland. Antworte nur mit einer nummerierten Liste ohne weitere Erklärungen."}]}'`,
-          { encoding: "utf-8", timeout: 10000 }
-        );
-        
-        const data = JSON.parse(response);
-        if (data.choices && data.choices[0] && data.choices[0].message) {
-          const newsText = data.choices[0].message.content;
-          return "📰 TOP 5 Nachrichten von heute:" + (newsText ? "\n" + newsText : "\nNicht verfügbar");
+    const originalFilename = path.basename(filePath, path.extname(filePath));
+    const scannerDatePattern = /^(\d{4}[-_]\d{2}[-_]\d{2}[\s_-]\d{2}[-_:]\d{2}[-_:]\d{2}|\d{8}[-_]\d{6})/;
+    const scannerMatch = originalFilename.match(scannerDatePattern);
+    const datePrefix = scannerMatch ? scannerMatch[1] : "";
+    
+    return JSON.stringify(analyzeTextContent(text, filePath, datePrefix), null, 2);
+  } catch (error: any) {
+    return `Error analyzing DOCX: ${error.message}`;
+  }
+}
+
+// Pages Analyse
+async function analyzePages(filePath: string): Promise<string> {
+  try {
+    const zip = new AdmZip(filePath);
+    const entries = zip.getEntries();
+    
+    let text = "";
+    for (const entry of entries) {
+      if (entry.entryName.includes("index.json")) {
+        const content = entry.getData().toString("utf8");
+        const jsonMatch = content.match(/"text":\s*"([^"]+)"/g);
+        if (jsonMatch) {
+          text = jsonMatch.map(m => m.replace(/"text":\s*"([^"]+)"/, '$1')).join(" ");
         }
-      } catch (perplexityError) {
-        console.log("Perplexity API nicht verfügbar, fallback zu T-Online RSS");
       }
     }
     
-    // Fallback: T-Online RSS
-    const result = execSync(
-      `curl -s "https://www.t-online.de/nachrichten/feed.rss" | grep -o "<title>[^<]*</title>" | sed 's/<title>//;s|</title>||' | head -7 | tail -5`,
-      { encoding: "utf-8", timeout: 5000 }
-    );
-    
-    const newsItems = result.trim().split("\n").filter(line => line.length > 0);
-    if (newsItems.length > 0) {
-      return "📰 Aktuelle Nachrichten (T-Online):\n" + newsItems.map((item, i) => `${i + 1}. ${item}`).join("\n");
+    if (!text || text.length < 50) {
+      for (const entry of entries) {
+        if (entry.entryName.includes("QuickLook/Preview.pdf")) {
+          const pdfBuffer = entry.getData();
+          try {
+            const pdfData = await pdfParse(pdfBuffer);
+            text = pdfData.text;
+          } catch (error) {
+            console.error("Could not extract text from Pages preview");
+          }
+          break;
+        }
+      }
     }
     
-    return "📰 Keine News verfügbar";
-  } catch (error) {
-    return "📰 News nicht verfügbar";
+    const originalFilename = path.basename(filePath, path.extname(filePath));
+    const scannerDatePattern = /^(\d{4}[-_]\d{2}[-_]\d{2}[\s_-]\d{2}[-_:]\d{2}[-_:]\d{2}|\d{8}[-_]\d{6})/;
+    const scannerMatch = originalFilename.match(scannerDatePattern);
+    const datePrefix = scannerMatch ? scannerMatch[1] : "";
+    
+    return JSON.stringify(analyzeTextContent(text, filePath, datePrefix), null, 2);
+  } catch (error: any) {
+    return `Error analyzing Pages: ${error.message}`;
   }
 }
 
-async function getBriefing(timeframe: string = "heute"): Promise<string> {
-  const { startDate, endDate } = getDateRange(timeframe);
+// Bild Analyse
+async function analyzeImage(filePath: string): Promise<string> {
+  try {
+    const worker = await createWorker("deu");
+    const { data: { text } } = await worker.recognize(filePath);
+    await worker.terminate();
+    
+    const originalFilename = path.basename(filePath, path.extname(filePath));
+    const scannerDatePattern = /^(\d{4}[-_]\d{2}[-_]\d{2}[\s_-]\d{2}[-_:]\d{2}[-_:]\d{2}|\d{8}[-_]\d{6})/;
+    const scannerMatch = originalFilename.match(scannerDatePattern);
+    const datePrefix = scannerMatch ? scannerMatch[1] : "";
+    
+    return JSON.stringify(analyzeTextContent(text, filePath, datePrefix), null, 2);
+  } catch (error: any) {
+    return `Error analyzing image: ${error.message}`;
+  }
+}
 
-  const [weather, calendar, reminders, mail, news] = await Promise.all([
-    getWeather(),
-    getCalendarEvents(startDate, endDate),
-    getReminders(),
-    getUnreadMail(),
-    getNews(),
-  ]);
+// TXT Analyse
+async function analyzeTxt(filePath: string): Promise<string> {
+  try {
+    const text = fs.readFileSync(filePath, "utf-8");
+    
+    const originalFilename = path.basename(filePath, path.extname(filePath));
+    const scannerDatePattern = /^(\d{4}[-_]\d{2}[-_]\d{2}[\s_-]\d{2}[-_:]\d{2}[-_:]\d{2}|\d{8}[-_]\d{6})/;
+    const scannerMatch = originalFilename.match(scannerDatePattern);
+    const datePrefix = scannerMatch ? scannerMatch[1] : "";
+    
+    return JSON.stringify(analyzeTextContent(text, filePath, datePrefix), null, 2);
+  } catch (error: any) {
+    return `Error analyzing TXT: ${error.message}`;
+  }
+}
 
-  return `
-🌤️  WETTER
-${weather}
-
-📅 TERMINE (${timeframe})
-${calendar}
-
-✅ ERINNERUNGEN
-${reminders}
-
-📧 MAIL
-${mail}
-
-📰 NEWS
-${news}
-  `.trim();
+// Haupt-Analyse-Funktion mit Multi-Format Support
+async function analyzeDocument(filePath: string): Promise<string> {
+  const ext = path.extname(filePath).toLowerCase();
+  
+  switch (ext) {
+    case ".pdf":
+      return analyzePdf(filePath);
+    case ".docx":
+      return analyzeDocx(filePath);
+    case ".pages":
+      return analyzePages(filePath);
+    case ".png":
+    case ".jpg":
+    case ".jpeg":
+      return analyzeImage(filePath);
+    case ".txt":
+      return analyzeTxt(filePath);
+    default:
+      return JSON.stringify({
+        error: `Unsupported file type: ${ext}`,
+        supportedTypes: [".pdf", ".docx", ".pages", ".png", ".jpg", ".jpeg", ".txt"]
+      }, null, 2);
+  }
 }
 
 const server = new Server(
   {
-    name: "perplexity-mcp-briefing",
-    version: "1.0.0",
+    name: "mcp-document-intelligence",
+    version: "2.0.0",
   },
   {
     capabilities: {
@@ -465,62 +287,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "get_briefing",
-        description: "Erstellt ein Briefing mit Wetter, Terminen, Erinnerungen, Mails und News",
-        inputSchema: {
-          type: "object",
-          properties: {
-            timeframe: {
-              type: "string",
-              description: "Zeitraum: 'heute', 'wochenende', 'woche'",
-              default: "heute",
-            },
-          },
-        },
-      },
-      {
-        name: "get_weather",
-        description: "Zeigt das aktuelle Wetter",
-        inputSchema: { type: "object", properties: {} },
-      },
-      {
-        name: "get_calendar_events",
-        description: "Zeigt Termine für einen Zeitraum",
-        inputSchema: {
-          type: "object",
-          properties: {
-            timeframe: {
-              type: "string",
-              description: "Zeitraum: 'heute', 'wochenende', 'woche'",
-              default: "heute",
-            },
-          },
-        },
-      },
-      {
-        name: "get_reminders",
-        description: "Zeigt heute fällige Erinnerungen",
-        inputSchema: { type: "object", properties: {} },
-      },
-      {
-        name: "get_unread_mail",
-        description: "Zeigt ungelesene, markierte und letzte Mails",
-        inputSchema: { type: "object", properties: {} },
-      },
-      {
-        name: "get_news",
-        description: "Zeigt aktuelle Nachrichten von Tagesschau",
-        inputSchema: { type: "object", properties: {} },
-      },
-      {
-        name: "analyze_pdf_and_suggest_filename",
-        description: "Analysiert ein PDF (mit OCR bei gescannten Dokumenten), extrahiert Datum, Referenznummern und schlägt einen intelligenten Dateinamen vor. Behält Scanner-Datum/Zeit bei falls vorhanden.",
+        name: "analyze_document",
+        description: "Analysiert Dokumente (PDF, DOCX, Pages, Bilder, TXT) und schlägt intelligente Dateinamen vor. Extrahiert Datum, Referenznummern und Keywords aus dem Dokumentinhalt.",
         inputSchema: {
           type: "object",
           properties: {
             filePath: {
               type: "string",
-              description: "Vollständiger Pfad zur PDF-Datei"
+              description: "Vollständiger Pfad zur Dokumentdatei (.pdf, .docx, .pages, .png, .jpg, .jpeg, .txt)"
             }
           },
           required: ["filePath"]
@@ -535,57 +309,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
-      case "get_briefing": {
-        const timeframe = (args?.timeframe as string) || "heute";
-        const briefing = await getBriefing(timeframe);
-        return {
-          content: [{ type: "text", text: briefing }],
-        };
-      }
-
-      case "get_weather": {
-        const weather = await getWeather();
-        return {
-          content: [{ type: "text", text: weather }],
-        };
-      }
-
-      case "get_calendar_events": {
-        const timeframe = (args?.timeframe as string) || "heute";
-        const { startDate, endDate } = getDateRange(timeframe);
-        const events = await getCalendarEvents(startDate, endDate);
-        return {
-          content: [{ type: "text", text: events }],
-        };
-      }
-
-      case "get_reminders": {
-        const reminders = await getReminders();
-        return {
-          content: [{ type: "text", text: reminders }],
-        };
-      }
-
-      case "get_unread_mail": {
-        const mail = await getUnreadMail();
-        return {
-          content: [{ type: "text", text: mail }],
-        };
-      }
-
-      case "get_news": {
-        const news = await getNews();
-        return {
-          content: [{ type: "text", text: news }],
-        };
-      }
-
-      case "analyze_pdf_and_suggest_filename": {
+      case "analyze_document": {
         const filePath = args?.filePath as string;
         if (!filePath) {
-          throw new Error("filePath ist erforderlich");
+          throw new Error("filePath is required");
         }
-        const result = await analyzePdfAndSuggestFilename(filePath);
+        const result = await analyzeDocument(filePath);
         return {
           content: [{ type: "text", text: result }],
         };
@@ -605,7 +334,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Perplexity MCP Briefing Server läuft");
+  console.error("MCP Document Intelligence Server v2.0 running - Multi-format support enabled");
 }
 
 main().catch(console.error);

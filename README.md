@@ -2,7 +2,7 @@
 
 **Model Context Protocol Server with PDF OCR and intelligent filename generation**
 
-Intelligent document processing for PDFs: Extract text from PDFs (including OCR for scanned documents) and suggest smart, structured filenames based on document content.
+Multi-format document intelligence: PDF, DOCX, Pages, Images, TXT Extract text from various document formats (including OCR for scanned documents) and suggest smart, structured filenames based on document content.
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -11,8 +11,8 @@ Intelligent document processing for PDFs: Extract text from PDFs (including OCR 
 
 ## 🎯 Features
 
-### 📄 PDF Document Intelligence
-- **Text Extraction**: Extract text from PDFs using pdf-parse
+### 📄 Multi-Format Document Intelligence
+- **Text Extraction**: Extract text from PDF, DOCX, Pages, Images, TXT
 - **OCR Support**: Tesseract.js for scanned documents
 - **Smart Filename Suggestions**: Automatically extracts:
   - Scanner timestamps (preserves existing `2024-01-24_14-30-45` format)
