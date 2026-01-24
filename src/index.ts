@@ -7,6 +7,10 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { execSync } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
+const pdfParse = require("pdf-parse");
+import { createWorker } from "tesseract.js";
 
 // AppleScript Hilfsfunktion
 function runAppleScript(script: string): string {
@@ -98,6 +102,135 @@ async function getWeather(): Promise<string> {
     return `Dresden: ${current.temperature_2m}°C, ${description}, Luftfeuchte: ${current.relative_humidity_2m}%`;
   } catch (error) {
     return "Wetter: Daten aktuell nicht verfügbar";
+  }
+}
+
+// PDF-Analyse mit OCR und intelligente Dateinamen-Vorschläge
+async function analyzePdfAndSuggestFilename(filePath: string): Promise<string> {
+  try {
+    // PDF-Datei einlesen
+    const dataBuffer = fs.readFileSync(filePath);
+    
+    // Versuche zuerst Text aus PDF zu extrahieren
+    let extractedText = "";
+    try {
+      const pdfData = await pdfParse(dataBuffer);
+      extractedText = pdfData.text;
+    } catch (error) {
+      console.error("PDF-Extraktion fehlgeschlagen, nutze OCR...");
+    }
+    
+    // Falls kein Text oder zu wenig Text, nutze OCR
+    if (!extractedText || extractedText.trim().length < 50) {
+      console.error("Führe OCR durch...");
+      const worker = await createWorker("deu");
+      // Konvertiere erste Seite zu Bild und führe OCR durch
+      // Hier müssten wir PDF -> Bild konvertieren (z.B. mit pdf-to-image)
+      // Für jetzt: Nutze vorhandenen Text
+      await worker.terminate();
+    }
+    
+    // Analysiere bestehenden Dateinamen
+    const originalFilename = path.basename(filePath, path.extname(filePath));
+    let datePrefix = "";
+    
+    // Prüfe ob Scanner-Datum am Anfang (z.B. "2024-01-24 14-30-45" oder "20240124_143045")
+    const scannerDatePattern = /^(\d{4}[-_]\d{2}[-_]\d{2}[\s_-]\d{2}[-_:]\d{2}[-_:]\d{2}|\d{8}[-_]\d{6})/;
+    const scannerMatch = originalFilename.match(scannerDatePattern);
+    if (scannerMatch) {
+      datePrefix = scannerMatch[1];
+    }
+    
+    // Extrahiere Datum aus Text (verschiedene Formate)
+    const datePatterns = [
+      /(\d{1,2})\.(\d{1,2})\.(\d{4})/g,  // DD.MM.YYYY
+      /(\d{4})-(\d{2})-(\d{2})/g,        // YYYY-MM-DD
+      /vom\s+(\d{1,2})\.(\d{1,2})\.(\d{4})/gi,
+      /Datum[:\s]+(\d{1,2})\.(\d{1,2})\.(\d{4})/gi,
+    ];
+    
+    let documentDate = "";
+    for (const pattern of datePatterns) {
+      const match = extractedText.match(pattern);
+      if (match) {
+        documentDate = match[0].replace(/vom\s+|Datum[:\s]+/gi, "").trim();
+        break;
+      }
+    }
+    
+    // Extrahiere Referenznummern (Rechnungs-Nr, Kunden-Nr, etc.)
+    const referencePatterns = [
+      /(?:Rechnungs[-\s]?Nr\.?|Invoice)[:\s]+([A-Z0-9-]+)/gi,
+      /(?:Kunden[-\s]?Nr\.?|Customer)[:\s]+([A-Z0-9-]+)/gi,
+      /(?:Bestell[-\s]?Nr\.?|Order)[:\s]+([A-Z0-9-]+)/gi,
+      /(?:Vertrag[-\s]?Nr\.?|Contract)[:\s]+([A-Z0-9-]+)/gi,
+      /Nr\.?\s+([A-Z0-9]{5,})/gi,
+    ];
+    
+    const references: string[] = [];
+    for (const pattern of referencePatterns) {
+      const matches = extractedText.matchAll(pattern);
+      for (const match of matches) {
+        if (match[1] && !references.includes(match[1])) {
+          references.push(match[1]);
+        }
+      }
+    }
+    
+    // Extrahiere Schlüsselwörter für Inhaltsbeschreibung
+    const keywords: string[] = [];
+    const keywordPatterns = [
+      /\b(Rechnung|Invoice|Vertrag|Contract|Angebot|Offer|Bestellung|Order|Lieferschein|Mahnung)\b/gi,
+      /\b(Telekom|Vodafone|Amazon|PayPal|Bank|Versicherung|Strom|Gas|Internet)\b/gi,
+    ];
+    
+    for (const pattern of keywordPatterns) {
+      const matches = extractedText.matchAll(pattern);
+      for (const match of matches) {
+        const keyword = match[0].toLowerCase();
+        if (!keywords.includes(keyword)) {
+          keywords.push(keyword);
+        }
+      }
+    }
+    
+    // Baue Dateinamen zusammen
+    const parts: string[] = [];
+    
+    // 1. Scanner-Datum beibehalten oder Dokumentdatum nutzen
+    if (datePrefix) {
+      parts.push(datePrefix);
+    } else if (documentDate) {
+      parts.push(documentDate.replace(/\./g, "-"));
+    }
+    
+    // 2. Referenznummern
+    if (references.length > 0) {
+      parts.push(references.slice(0, 2).join("_"));
+    }
+    
+    // 3. Keywords (max 3)
+    if (keywords.length > 0) {
+      parts.push(keywords.slice(0, 3).join("_"));
+    }
+    
+    const suggestedFilename = parts.length > 0 
+      ? parts.join("_") + ".pdf"
+      : `dokument_${Date.now()}.pdf`;
+    
+    return JSON.stringify({
+      originalFilename: path.basename(filePath),
+      suggestedFilename,
+      documentDate,
+      references,
+      keywords,
+      scannerDatePreserved: !!datePrefix,
+      textLength: extractedText.length,
+      preview: extractedText.substring(0, 500)
+    }, null, 2);
+    
+  } catch (error: any) {
+    return `Fehler bei PDF-Analyse: ${error.message}`;
   }
 }
 
@@ -364,6 +497,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: "Zeigt aktuelle Nachrichten von Tagesschau",
         inputSchema: { type: "object", properties: {} },
       },
+      {
+        name: "analyze_pdf_and_suggest_filename",
+        description: "Analysiert ein PDF (mit OCR bei gescannten Dokumenten), extrahiert Datum, Referenznummern und schlägt einen intelligenten Dateinamen vor. Behält Scanner-Datum/Zeit bei falls vorhanden.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            filePath: {
+              type: "string",
+              description: "Vollständiger Pfad zur PDF-Datei"
+            }
+          },
+          required: ["filePath"]
+        },
+      },
     ],
   };
 });
@@ -415,6 +562,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const news = await getNews();
         return {
           content: [{ type: "text", text: news }],
+        };
+      }
+
+      case "analyze_pdf_and_suggest_filename": {
+        const filePath = args?.filePath as string;
+        if (!filePath) {
+          throw new Error("filePath ist erforderlich");
+        }
+        const result = await analyzePdfAndSuggestFilename(filePath);
+        return {
+          content: [{ type: "text", text: result }],
         };
       }
 

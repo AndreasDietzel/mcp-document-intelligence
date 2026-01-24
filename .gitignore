@@ -1,6 +1,12 @@
 node_modules/
 build/
+dist/
 *.log
 .DS_Store
 *.json.local
 .env
+.env.local
+*-config.json
+!.example.json
+logs/
+data/
