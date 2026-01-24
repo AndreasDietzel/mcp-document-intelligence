@@ -1,83 +1,221 @@
-# Perplexity Briefing MCP Server
+# Perplexity MCP Briefing
 
-Ein Model Context Protocol (MCP) Server für **Perplexity** und andere MCP-Clients, der personalisierte Briefings aus verschiedenen Mac-Datenquellen erstellt.
+**Professional Model Context Protocol Server for automated daily briefings**
 
-**⚡ Performance:** ~1 Sekunde für komplettes Briefing (dramatisch optimiert!)
+Get instant, personalized briefings from your macOS data sources directly in Perplexity. Weather, calendar, reminders, emails, and news - all in under 1 second.
+
+[![Performance](https://img.shields.io/badge/Performance-~1s-brightgreen)](PERFORMANCE.md)
+[![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+---
+
+## ⚡ Performance
+
+**~1 second** for complete briefing with all data sources
+
+See [PERFORMANCE.md](PERFORMANCE.md) for optimization details.
+
+---
 
 ## ✨ Features
 
-- 🌤️ **Wetter**: Aktuelle Wetterdaten von macOS Wetter-App
-- 📅 **Kalender**: Termine aus deinen wichtigsten Kalendern (3 Hauptkalender)
-- ✅ **Erinnerungen**: Heute fällige Aufgaben
-- 📧 **E-Mails**: Top 5 ungelesene Nachrichten aus der Inbox
-- 📰 **Nachrichten**: Aktuelle News von der Tagesschau
+| Feature | Source | Speed |
+|---------|--------|-------|
+| 🌤️ **Weather** | macOS Weather App | 0.52s |
+| 📅 **Calendar** | Calendar.app (top 3 calendars) | 0.37s |
+| ✅ **Reminders** | Reminders.app (today's due) | 0.38s |
+| 📧 **Mail** | Mail.app Inbox (top 5 unread) | 0.66s |
+| 📰 **News** | Tagesschau RSS (configurable) | 0.48s |
 
-**Siehe [PERFORMANCE.md](PERFORMANCE.md) für Details zur Optimierung.**
+---
 
-## 🎯 Ziel
+## 🚀 Quick Start
 
-Perplexity (und anderen MCP-fähigen AI-Clients) eine umfassende Zusammenfassung aus lokalen Mac-Datenquellen bereitzustellen:
-- 📅 Kalender (Calendar.app)
-- ✅ Erinnerungen (Reminders.app)
-- 📧 Mail (ungelesen, wichtig)
-- 📰 News aus dem Internet
-- 🌤️ Wetter
-- 💰 Finanzen (optional: MoneyMoney Integration)
-- 🎂 Geburtstage
-- 📝 Notizen
-
-## ⏰ Zeiträume
-
-Das Briefing kann sich beziehen auf:
-- **Heute** (Standard)
-- **Wochenende**
-- **Kommende Woche**
-- **Beliebiger Zeitraum** (definierbar)
-
-## 🛠️ Installation
+### Installation
 
 ```bash
+git clone https://github.com/AndreasDietzel/perplexity-mcp-briefing.git
+cd perplexity-mcp-briefing
 npm install
 npm run build
 ```
 
-## 🚀 Verwendung mit Perplexity / Claude Desktop
+### Configuration
 
-Konfiguration in der MCP-Settings-Datei (sobald Perplexity MCP unterstützt):
+Add to `~/.config/perplexity/mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "briefing": {
-      "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/YOUR/briefing-mcp-server/build/index.js"]
+      "type": "stdio",
+      "command": "/usr/local/bin/node",
+      "args": ["/ABSOLUTE/PATH/TO/perplexity-mcp-briefing/build/index.js"]
     }
   }
 }
 ```
 
-## 📋 Verfügbare Tools
+### Usage
 
-- `get_briefing` - Komplettes Briefing (Wetter + Kalender + Erinnerungen + Mail + News)
-- `get_weather` - Aktuelles Wetter von macOS Wetter-App
-- `get_calendar_events` - Kalendereinträge für Zeitraum (3 Hauptkalender)
-- `get_reminders` - Heute fällige Erinnerungen
-- `get_unread_mail` - Top 5 ungelesene E-Mails aus Inbox
-- `get_news` - Aktuelle Nachrichten (Tagesschau oder andere Quelle)
-- `get_reminders` - Fällige Erinnerungen/Aufgaben
-- `get_unread_mail` - Ungelesene E-Mails
-- `get_weather` - Wettervorhersage
-- `get_news` - Aktuelle Nachrichten
-- `get_birthdays` - Anstehende Geburtstage
-- `get_notes` - Zuletzt bearbeitete Notizen
+Restart Perplexity and ask:
 
-## 🔧 Technologie
+```
+Erstelle mir ein Briefing für heute
+```
 
-- TypeScript
-- Model Context Protocol (MCP)
-- AppleScript für Mac-Integration
-- Node.js
+or
 
-## 📝 Lizenz
+```
+Give me a weekend briefing
+```
 
-MIT
+---
+
+## 📋 Available Tools
+
+### `get_briefing`
+Complete briefing with all data sources (~1s)
+
+**Parameters:**
+- `timeframe`: "heute" | "wochenende" | "woche" (default: "heute")
+
+### `get_weather`
+Current weather from macOS Weather App (0.52s)
+
+### `get_calendar_events`
+Calendar events for timeframe (0.37s)
+
+**Parameters:**
+- `timeframe`: "heute" | "wochenende" | "woche"
+
+### `get_reminders`
+Today's due reminders (0.38s)
+
+### `get_unread_mail`
+Top 5 unread emails from Inbox (0.66s)
+
+### `get_news`
+Latest news headlines (0.48s)
+
+**Parameters:**
+- `source`: "tagesschau" (default) or custom RSS feed
+
+---
+
+## 🎯 Optimizations
+
+### Before
+- ❌ 8-12 seconds for complete briefing
+- ❌ Querying all 18 calendars
+- ❌ All open reminders
+- ❌ Top 10 emails from all mailboxes
+
+### After
+- ✅ ~1 second for complete briefing
+- ✅ Top 3 calendars only
+- ✅ Only today's due reminders
+- ✅ Top 5 emails from Inbox only
+
+**Result: 8-12x faster!**
+
+---
+
+## 🔒 Privacy & Security
+
+All data stays local on your Mac:
+- ✅ No external API calls for personal data
+- ✅ No data storage or logging
+- ✅ Direct AppleScript integration
+- ✅ News only from public RSS feeds
+
+See [SECURITY.md](SECURITY.md) for details.
+
+---
+
+## 📝 Example Output
+
+```
+📋 BRIEFING FÜR HEUTE (2026-01-24)
+
+🌤️ WETTER:
+München | 5°C | Bewölkt | H: 8°C L: 2°C
+
+📅 KALENDER:
+Team Meeting | Fr 24. Jan 2026 14:00 | Office
+Dentist Appointment | Fr 24. Jan 2026 16:30 | Downtown
+
+✅ HEUTE FÄLLIG:
+• Finish presentation | Fr 24. Jan 2026 12:00
+• Buy groceries | Fr 24. Jan 2026 18:00
+
+📧 UNGELESENE E-MAILS:
+Project Update | Von: boss@company.com | Fr 24. Jan 2026 09:15
+Invoice #123 | Von: billing@service.com | Fr 24. Jan 2026 10:30
+
+📰 NACHRICHTEN (Tagesschau):
+• Breaking: Major policy announcement
+• Economy: Markets show positive trend
+• Technology: New AI breakthrough
+```
+
+---
+
+## 🛠️ Development
+
+### Build
+```bash
+npm run build
+```
+
+### Watch Mode
+```bash
+npm run watch
+```
+
+### Performance Test
+```bash
+./test-performance.sh
+```
+
+---
+
+## 🌐 Use Cases
+
+- **Morning Briefing**: Get daily overview before starting work
+- **Weekend Planning**: See upcoming events and tasks
+- **Quick Check**: Ask Perplexity for updates anytime
+- **Travel Prep**: Check weather and appointments
+- **Productivity**: Stay on top of tasks and emails
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Areas for improvement:
+
+- [ ] Additional news sources (ARD, Spiegel, BBC)
+- [ ] Configurable calendar selection
+- [ ] Multiple reminder lists support
+- [ ] Notes.app integration
+- [ ] Birthdays from Contacts
+- [ ] Caching for weather/news (target: <0.5s)
+
+---
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file
+
+---
+
+## 🙏 Acknowledgments
+
+- Built with [Model Context Protocol SDK](https://github.com/modelcontextprotocol)
+- Designed for [Perplexity](https://www.perplexity.ai/)
+- Optimized for macOS
+
+---
+
+**Made with ❤️ for productive mornings**

@@ -1,11 +1,11 @@
 {
-  "name": "perplexity-briefing-mcp-server",
-  "version": "0.1.0",
-  "description": "MCP Server für Perplexity: Erstellt personalisierte Briefings aus Mac-Datenquellen (Kalender, Erinnerungen, Mail, News)",
+  "name": "perplexity-mcp-briefing",
+  "version": "1.0.0",
+  "description": "Professional MCP Server for Perplexity: Automated daily briefings from macOS data sources (Weather, Calendar, Reminders, Mail, News)",
   "type": "module",
   "main": "build/index.js",
   "bin": {
-    "briefing-mcp-server": "./build/index.js"
+    "perplexity-mcp-briefing": "./build/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -15,15 +15,18 @@
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
+    "perplexity",
     "briefing",
     "calendar",
     "reminders",
     "mail",
     "news",
-    "applescript",
-    "macos"
+    "weather",
+    "macos",
+    "productivity"
   ],
-  "author": "Andreas Dietzel",
+  "author": "",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4"
