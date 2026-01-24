@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "briefing": {
+      "command": "node",
+      "args": ["/Users/andreasdietzel/Projects/briefing-mcp-server/build/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
