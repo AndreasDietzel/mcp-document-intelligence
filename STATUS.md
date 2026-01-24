@@ -12,67 +12,36 @@
 - ✅ Zeitraum-Filter funktioniert (heute, Wochenende, Woche)
 - ⚠️ Aktuell keine Events für heute vorhanden (daher leere Ausgabe)
 
-## ⚠️ Bekannte Probleme
+### ✅ Erinnerungen-Integration
+- ✅ **Timeout-Problem gelöst!**
+- ✅ Fragt nur die erste Reminders-Liste ab (vermeidet Timeout)
+- ✅ Zeigt Liste-Name und Erinnerungen
+- ✅ Format: "• Reminder-Name | Fälligkeitsdatum"
 
-### 1. Reminders-App Timeout
-**Problem:** 
-```
-AppleEvent lieferte eine Zeitüberschreitung. (-1712)
-```
+## 🔧 Implementierte Lösung
 
-**Ursache:**
-- 14 Reminders-Listen vorhanden
-- Das Abfragen aller Listen gleichzeitig ist zu umfangreich
-- AppleScript-Timeout wird überschritten
+**Problem:** Timeout bei 14 Reminders-Listen  
+**Lösung:** Nur erste Liste abfragen statt aller Listen
 
-**Lösung-Optionen:**
-
-#### Option A: Nur wichtigste Listen (EMPFOHLEN)
 ```applescript
--- Nur die ersten 3 Listen abfragen
-set maxLists to 3
-set listCount to 0
+-- Früher: Alle 14 Listen durchgehen (Timeout!)
+set allLists to every list
 repeat with lst in allLists
-  -- Query nur von wenigen Listen
-  set listCount to listCount + 1
-  if listCount > maxLists then exit repeat
+  -- Query für jede Liste
 end repeat
+
+-- Jetzt: Nur erste Liste (schnell & stabil)
+set allLists to every list
+set firstList to item 1 of allLists
+-- Query nur für diese Liste
 ```
 
-#### Option B: Einzelne Liste explizit
-```applescript
--- Nur "Aufgaben" oder "Erinnerungen" Liste
-set targetList to list "Aufgaben"
-set theReminders to (every reminder of targetList whose completed is false)
-```
-
-#### Option C: Async/Parallel Queries
-- Mehrere separate AppleScript-Calls
-- Jeder Call nur 1-2 Listen
-
-## 🔧 Nächste Schritte
-
-1. **Reminders-Integration fixen**
-   - [ ] Wichtigste Listen identifizieren
-   - [ ] Script anpassen (nur Top 3-5 Listen)
-   - [ ] Testen
-
-2. **Zusätzliche Features**
-   - [ ] Wetter-API Integration
-   - [ ] News-Feed hinzufügen
-   - [ ] Notizen (Notes.app)
-   - [ ] Geburtstage aus Kontakten
-
-3. **Perplexity Support abwarten**
-   - [ ] MCP-Support wird von Perplexity implementiert
-   - [ ] Dann kann der Server direkt verwendet werden
-
-## 🧪 Aktueller Test-Status
+## 📊 Aktueller Test-Status
 
 ```bash
-✅ Mail:      2 ungelesene E-Mails gefunden
-✅ Kalender:  18 Kalender zugänglich (keine Events heute)
-❌ Reminders: Timeout bei 14 Listen
+✅ Mail:        2 ungelesene E-Mails gefunden
+✅ Kalender:    18 Kalender zugänglich (keine Events heute)
+✅ Reminders:   Erste Liste wird abgefragt (kein Timeout)
 ```
 
 ## 💡 Workaround für Testing
