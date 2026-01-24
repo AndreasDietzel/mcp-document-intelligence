@@ -63,27 +63,45 @@ function getDateRange(timeframe: string): { startDate: Date; endDate: Date } {
   }
 }
 
-// FIX 1: Wetter mit curl und längerem Timeout
+// FIX 1: Wetter mit Open-Meteo (kostenlos, zuverlässig)
 async function getWeather(): Promise<string> {
   try {
-    // Versuche wttr.in mit curl (10s timeout)
-    const result = execSync(
-      'curl -s --max-time 10 "https://wttr.in/?format=%l:+%C+%t" 2>/dev/null || echo ""',
-      { encoding: "utf-8", timeout: 12000 }
+    // Open-Meteo API für Dresden (51.05°N, 13.74°E) - keine API-Keys erforderlich!
+    const response = execSync(
+      'curl -s "https://api.open-meteo.com/v1/forecast?latitude=51.05&longitude=13.74&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code&temperature_unit=celsius&timezone=auto"',
+      { encoding: "utf-8", timeout: 8000 }
     );
-    const weather = result.trim();
-    if (weather && !weather.includes('not found')) {
-      return weather;
+    
+    const data = JSON.parse(response);
+    const current = data.current;
+    
+    if (!current) {
+      return "Wetter: Daten nicht verfügbar";
     }
     
-    // Fallback: Einfache Meldung
-    return "Wetter: Daten aktuell nicht verfügbar";
+    const weatherDescriptions: { [key: number]: string } = {
+      0: "Klarer Himmel",
+      1: "Heiter",
+      2: "Teilweise bewölkt",
+      3: "Bewölkt",
+      45: "Nebel",
+      51: "Leichter Regen",
+      61: "Regen",
+      71: "Schnee",
+      80: "Regenschauer",
+      95: "Gewitter"
+    };
+    
+    const weatherCode = current.weather_code || 0;
+    const description = weatherDescriptions[weatherCode] || "Unbekannt";
+    
+    return `Dresden: ${current.temperature_2m}°C, ${description}, Luftfeuchte: ${current.relative_humidity_2m}%`;
   } catch (error) {
     return "Wetter: Daten aktuell nicht verfügbar";
   }
 }
 
-// FIX 2: Kalender - Optimiert, nur ERSTE Kalender, nur HEUTE
+// FIX 2: Kalender - Mehrere Kalender durchsuchen, alle Events für heute
 async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string> {
   const script = `
     set output to ""
@@ -93,16 +111,25 @@ async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string
     
     tell application "Calendar"
       try
-        -- Nur ERSTEN Kalender verwenden für Geschwindigkeit
-        set cal to calendar 1
-        set allEvents to (every event of cal)
+        -- Durchsuche ALLE Kalender
+        set allEvents to {}
+        repeat with cal in calendars
+          try
+            set calEvents to (every event of cal)
+            repeat with evt in calEvents
+              set end of allEvents to evt
+            end repeat
+          end try
+        end repeat
         
+        -- Filtere Events für heute
         repeat with evt in allEvents
           try
             set evtStart to start date of evt
             if evtStart >= todayStart and evtStart < todayEnd then
               set evtName to summary of evt
-              set output to output & evtName & linefeed
+              set evtTime to time string of evtStart
+              set output to output & "🗓️ " & evtName & " (" & evtTime & ")" & linefeed
             end if
           end try
         end repeat
@@ -110,9 +137,9 @@ async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string
     end tell
     
     if output is "" then
-      return "Keine Termine heute"
+      return "📅 Keine Termine für heute"
     else
-      return output
+      return "📅 Termine für heute:" & linefeed & output
     end if
   `;
   return runAppleScript(script);
@@ -155,85 +182,49 @@ async function getReminders(): Promise<string> {
   return runAppleScript(script);
 }
 
-// FIX 4: Mail mit korrigierter Syntax
+// FIX 4: Mail - Alle Mails in der Inbox erfassen
 async function getUnreadMail(): Promise<string> {
   const script = `
     tell application "Mail"
-      set unreadMessages to {}
-      set flaggedMessages to {}
-      set recentMessages to {}
+      set allMailsOutput to ""
       
-      -- Ungelesene Mails
-      set allUnread to (every message of inbox whose read status is false)
-      set unreadCount to count of allUnread
-      if unreadCount > 0 then
-        set maxUnread to 3
-        if unreadCount < maxUnread then set maxUnread to unreadCount
-        repeat with i from 1 to maxUnread
-          set msg to item i of allUnread
-          set end of unreadMessages to {subject:subject of msg, sender:sender of msg, dateReceived:date received of msg, isRead:false}
-        end repeat
-      end if
-      
-      -- Markierte Mails
-      set allFlagged to (every message of inbox whose flagged status is true)
-      set flaggedCount to count of allFlagged
-      if flaggedCount > 0 then
-        set maxFlagged to 3
-        if flaggedCount < maxFlagged then set maxFlagged to flaggedCount
-        repeat with i from 1 to maxFlagged
-          set msg to item i of allFlagged
-          set end of flaggedMessages to {subject:subject of msg, sender:sender of msg, dateReceived:date received of msg, isRead:(read status of msg)}
-        end repeat
-      end if
-      
-      -- Letzte 3 Mails
-      set allMessages to (every message of inbox)
-      set totalCount to count of allMessages
-      if totalCount > 0 then
-        set maxRecent to 3
-        if totalCount < maxRecent then set maxRecent to totalCount
-        repeat with i from 1 to maxRecent
-          set msg to item i of allMessages
-          set end of recentMessages to {subject:subject of msg, sender:sender of msg, dateReceived:date received of msg, isRead:(read status of msg)}
-        end repeat
-      end if
-      
-      -- Formatiere Ausgabe
-      set output to ""
-      
-      if (count of unreadMessages) > 0 then
-        set output to output & "📧 UNGELESEN (" & unreadCount & "):" & linefeed
-        repeat with msg in unreadMessages
-          set output to output & "  • " & subject of msg & " (von " & sender of msg & ")" & linefeed
-        end repeat
-        set output to output & linefeed
-      end if
-      
-      if (count of flaggedMessages) > 0 then
-        set output to output & "⭐ MARKIERT (" & flaggedCount & "):" & linefeed
-        repeat with msg in flaggedMessages
-          set readStatus to ""
-          if not (isRead of msg) then set readStatus to " [UNGELESEN]"
-          set output to output & "  • " & subject of msg & " (von " & sender of msg & ")" & readStatus & linefeed
-        end repeat
-        set output to output & linefeed
-      end if
-      
-      if (count of recentMessages) > 0 then
-        set output to output & "📬 LETZTE MAILS:" & linefeed
-        repeat with msg in recentMessages
-          set readStatus to ""
-          if not (isRead of msg) then set readStatus to " [UNGELESEN]"
-          set output to output & "  • " & subject of msg & " (von " & sender of msg & ")" & readStatus & linefeed
-        end repeat
-      end if
-      
-      if output is "" then
-        return "Keine Mails in der Inbox"
-      else
-        return output
-      end if
+      try
+        -- Hole ALLE Mails aus der Inbox
+        set allMessages to (every message of inbox)
+        set totalCount to count of allMessages
+        
+        if totalCount > 0 then
+          allMailsOutput to "📧 INBOX (" & totalCount & " Mails):" & linefeed & linefeed
+          
+          -- Zeige bis zu 20 Mails
+          set maxDisplay to 20
+          if totalCount < maxDisplay then set maxDisplay to totalCount
+          
+          repeat with i from 1 to maxDisplay
+            set msg to item i of allMessages
+            set msgSubject to subject of msg
+            set msgSender to sender of msg
+            set msgRead to read status of msg
+            set msgDate to date received of msg
+            set dateStr to date string of msgDate & " " & time string of msgDate
+            
+            set readStatus to "✅"
+            if not msgRead then set readStatus to "❌ UNGELESEN"
+            
+            set allMailsOutput to allMailsOutput & readStatus & " | " & msgSubject & " (von " & msgSender & ") | " & dateStr & linefeed
+          end repeat
+          
+          if totalCount > maxDisplay then
+            set allMailsOutput to allMailsOutput & linefeed & "... und " & (totalCount - maxDisplay) & " weitere Mails"
+          end if
+        else
+          set allMailsOutput to "📭 Inbox ist leer"
+        end if
+        
+        return allMailsOutput
+      on error errMsg
+        return "❌ Fehler beim Mailzugriff: " & errMsg
+      end try
     end tell
   `;
   return runAppleScript(script);
@@ -241,13 +232,43 @@ async function getUnreadMail(): Promise<string> {
 
 async function getNews(): Promise<string> {
   try {
+    // Versuche zuerst Perplexity News API
+    const perplexityApiKey = process.env.PERPLEXITY_API_KEY;
+    
+    if (perplexityApiKey) {
+      try {
+        const response = execSync(
+          `curl -s -X POST "https://api.perplexity.ai/chat/completions" \\
+            -H "Authorization: Bearer ${perplexityApiKey}" \\
+            -H "Content-Type: application/json" \\
+            -d '{"model":"pplx-7b-online","messages":[{"role":"user","content":"Gib mir die 5 wichtigsten Nachrichten von heute in Deutschland. Antworte nur mit einer nummerierten Liste ohne weitere Erklärungen."}]}'`,
+          { encoding: "utf-8", timeout: 10000 }
+        );
+        
+        const data = JSON.parse(response);
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+          const newsText = data.choices[0].message.content;
+          return "📰 TOP 5 Nachrichten von heute:" + (newsText ? "\n" + newsText : "\nNicht verfügbar");
+        }
+      } catch (perplexityError) {
+        console.log("Perplexity API nicht verfügbar, fallback zu Tagesschau RSS");
+      }
+    }
+    
+    // Fallback: Tagesschau RSS
     const result = execSync(
       `curl -s "https://www.tagesschau.de/xml/rss2/" | grep -o "<title>[^<]*</title>" | sed 's/<title>//;s|</title>||' | head -6 | tail -5`,
       { encoding: "utf-8", timeout: 5000 }
     );
-    return result.trim() || "Keine News verfügbar";
+    
+    const newsItems = result.trim().split("\n").filter(line => line.length > 0);
+    if (newsItems.length > 0) {
+      return "📰 Nachrichten von Tagesschau:\n" + newsItems.map((item, i) => `${i + 1}. ${item}`).join("\n");
+    }
+    
+    return "📰 Keine News verfügbar";
   } catch (error) {
-    return "News nicht verfügbar";
+    return "📰 News nicht verfügbar";
   }
 }
 
