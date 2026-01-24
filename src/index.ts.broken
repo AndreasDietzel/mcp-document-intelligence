@@ -145,6 +145,31 @@ async function getReminders(): Promise<string> {
 }
 
 async function getUnreadMail(): Promise<string> {
+  const script = `
+    set output to ""
+    tell application "Mail"
+      -- Explizit nur Inbox, max 5 Mails
+      set inboxAccount to account 1
+      set inboxMailbox to mailbox "INBOX" of inboxAccount
+      set unreadMessages to (every message of inboxMailbox whose read status is false)
+      set msgCount to count of unreadMessages
+      
+      if msgCount = 0 then
+        return "Keine ungelesenen E-Mails"
+      end if
+      
+      repeat with msg in (items 1 thru (minimum of {msgCount, 5}) of unreadMessages)
+        set msgSubject to subject of msg
+        set msgSender to sender of msg
+        set msgDate to date received of msg
+        set output to output & msgSubject & " | Von: " & msgSender & " | " & (msgDate as string) & linefeed
+      end repeat
+    end tell
+    return output
+  `;
+
+  return runAppleScript(script);
+}
 
 async function getWeather(): Promise<string> {
   const script = `
