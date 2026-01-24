@@ -74,8 +74,14 @@ async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string
     set output to ""
     
     tell application "Calendar"
+      -- Nur die ersten 3 Kalender für bessere Performance
       set allCalendars to every calendar
-      repeat with cal in allCalendars
+      set calendarCount to count of allCalendars
+      set maxCalendars to 3
+      if calendarCount < maxCalendars then set maxCalendars to calendarCount
+      
+      repeat with i from 1 to maxCalendars
+        set cal to item i of allCalendars
         set events to (every event of cal whose start date ≥ startDate and start date < endDate)
         repeat with evt in events
           set eventName to summary of evt
@@ -92,11 +98,17 @@ async function getCalendarEvents(startDate: Date, endDate: Date): Promise<string
 }
 
 async function getReminders(): Promise<string> {
+  const today = new Date();
+  const todayStr = today.toDateString();
+  
   const script = `
     set output to ""
+    set todayDate to date "${todayStr}"
+    set tomorrowDate to todayDate + (1 * days)
+    
     tell application "Reminders"
       try
-        -- Nur die erste Liste abfragen (vermeidet Timeout bei vielen Listen)
+        -- Nur die erste Liste abfragen
         set allLists to every list
         if (count of allLists) = 0 then
           return "Keine Reminders-Listen gefunden"
@@ -104,27 +116,25 @@ async function getReminders(): Promise<string> {
         
         set firstList to item 1 of allLists
         set listName to name of firstList
-        set incompleteReminders to (every reminder of firstList whose completed is false)
         
-        if (count of incompleteReminders) = 0 then
-          return "Keine offenen Erinnerungen in '" & listName & "'"
+        -- Nur offene Erinnerungen die heute fällig sind
+        set todayReminders to (every reminder of firstList whose completed is false and due date is not missing value and due date ≥ todayDate and due date < tomorrowDate)
+        
+        if (count of todayReminders) = 0 then
+          return "Keine heute fälligen Erinnerungen"
         end if
         
-        set output to "Liste: " & listName & return & return
+        set output to "Heute fällig (" & listName & "):" & return & return
         
-        repeat with rem in incompleteReminders
+        repeat with rem in todayReminders
           try
             set remName to name of rem
             set remDueDate to due date of rem
-            if remDueDate is not missing value then
-              set output to output & "• " & remName & " | Fällig: " & (remDueDate as string) & return
-            else
-              set output to output & "• " & remName & " | Kein Fälligkeitsdatum" & return
-            end if
+            set output to output & "• " & remName & " | " & (remDueDate as string) & return
           end try
         end repeat
       on error errMsg
-        return "Fehler beim Abrufen der Erinnerungen: " & errMsg
+        return "Fehler: " & errMsg
       end try
     end tell
     
@@ -138,9 +148,17 @@ async function getUnreadMail(): Promise<string> {
   const script = `
     set output to ""
     tell application "Mail"
-      set unreadMessages to (every message of inbox whose read status is false)
+      -- Explizit nur Inbox, max 5 Mails
+      set inboxAccount to account 1
+      set inboxMailbox to mailbox "INBOX" of inboxAccount
+      set unreadMessages to (every message of inboxMailbox whose read status is false)
       set msgCount to count of unreadMessages
-      repeat with msg in (items 1 thru (minimum of {msgCount, 10}) of unreadMessages)
+      
+      if msgCount = 0 then
+        return "Keine ungelesenen E-Mails"
+      end if
+      
+      repeat with msg in (items 1 thru (minimum of {msgCount, 5}) of unreadMessages)
         set msgSubject to subject of msg
         set msgSender to sender of msg
         set msgDate to date received of msg
@@ -153,27 +171,81 @@ async function getUnreadMail(): Promise<string> {
   return runAppleScript(script);
 }
 
+async function getWeather(): Promise<string> {
+  const script = `
+    tell application "Weather"
+      try
+        set currentCity to name of current city
+        set currentTemp to current temperature
+        set currentCondition to condition of current city
+        set todayHigh to high temperature of item 1 of forecast
+        set todayLow to low temperature of item 1 of forecast
+        return currentCity & " | " & currentTemp & "°C | " & currentCondition & " | H: " & todayHigh & "°C L: " & todayLow & "°C"
+      on error
+        return "Wetter-App nicht verfügbar"
+      end try
+    end tell
+  `;
+  
+  return runAppleScript(script);
+}
+
+async function getNews(source: string = "tagesschau"): Promise<string> {
+  // Tagesschau RSS Feed abrufen
+  const tagesschauUrl = "https://www.tagesschau.de/xml/rss2/";
+  
+  try {
+    const curlCommand = `curl -s "${tagesschauUrl}" | grep -E "<title>|<description>" | head -n 10 | sed 's/<[^>]*>//g' | sed 's/&amp;/\\&/g'`;
+    const result = execSync(curlCommand, { encoding: "utf-8" });
+    
+    const lines = result.split("\n").filter(l => l.trim());
+    let output = "";
+    
+    for (let i = 0; i < Math.min(lines.length, 6); i += 2) {
+      const title = lines[i]?.trim();
+      const desc = lines[i + 1]?.trim();
+      if (title && title !== "tagesschau.de - die erste Adresse für Nachrichten und umfassende Berichte") {
+        output += `• ${title}\n`;
+      }
+    }
+    
+    return output || "Keine aktuellen Nachrichten verfügbar";
+  } catch (error) {
+    return "Nachrichten konnten nicht abgerufen werden";
+  }
+}
+
 async function getBriefing(timeframe: string): Promise<string> {
   const { startDate, endDate } = getDateRange(timeframe);
   let briefing = `📋 BRIEFING FÜR ${timeframe.toUpperCase()} (${formatDate(startDate)} - ${formatDate(endDate)})\n\n`;
 
-  // Kalender
+  // Wetter
+  briefing += "🌤️ WETTER:\n";
+  const weather = await getWeather();
+  briefing += weather + "\n\n";
+
+  // Kalender (nur 3 Hauptkalender)
   briefing += "📅 KALENDER:\n";
   const events = await getCalendarEvents(startDate, endDate);
   briefing += events || "Keine Termine\n";
   briefing += "\n";
 
-  // Erinnerungen
-  briefing += "✅ ERINNERUNGEN:\n";
+  // Erinnerungen (nur heute fällig)
+  briefing += "✅ HEUTE FÄLLIG:\n";
   const reminders = await getReminders();
-  briefing += reminders || "Keine offenen Erinnerungen\n";
+  briefing += reminders || "Keine heute fälligen Erinnerungen\n";
   briefing += "\n";
 
-  // E-Mails
-  briefing += "📧 UNGELESENE E-MAILS (Top 10):\n";
+  // E-Mails (nur Inbox, max 5)
+  briefing += "📧 UNGELESENE E-MAILS:\n";
   const mail = await getUnreadMail();
   briefing += mail || "Keine ungelesenen E-Mails\n";
   briefing += "\n";
+
+  // News
+  briefing += "📰 NACHRICHTEN (Tagesschau):\n";
+  const news = await getNews();
+  briefing += news + "\n";
 
   return briefing;
 }
@@ -198,13 +270,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "get_briefing",
         description:
-          "Erstellt ein umfassendes Briefing mit Kalendereinträgen, Erinnerungen und E-Mails für einen Zeitraum. Standard ist 'heute', möglich sind auch 'wochenende', 'woche', oder benutzerdefinierte Zeiträume.",
+          "Erstellt ein umfassendes Briefing mit Wetter, Kalender, Erinnerungen, E-Mails und Nachrichten. Optimiert für schnelle Performance.",
         inputSchema: {
           type: "object",
           properties: {
             timeframe: {
               type: "string",
-              description: "Zeitraum für das Briefing: 'heute', 'wochenende', 'woche', oder benutzerdefiniert",
+              description: "Zeitraum für das Briefing: 'heute', 'wochenende', 'woche'",
               default: "heute",
             },
           },
@@ -212,7 +284,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "get_calendar_events",
-        description: "Listet alle Kalendereinträge für einen bestimmten Zeitraum",
+        description: "Listet Kalendereinträge für einen Zeitraum (nur 3 Hauptkalender für Performance)",
         inputSchema: {
           type: "object",
           properties: {
@@ -226,7 +298,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "get_reminders",
-        description: "Zeigt alle offenen Erinnerungen und Aufgaben",
+        description: "Zeigt heute fällige offene Erinnerungen",
         inputSchema: {
           type: "object",
           properties: {},
@@ -234,10 +306,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: "get_unread_mail",
-        description: "Zeigt die letzten 10 ungelesenen E-Mails",
+        description: "Zeigt die letzten 5 ungelesenen E-Mails aus der Inbox",
         inputSchema: {
           type: "object",
           properties: {},
+        },
+      },
+      {
+        name: "get_weather",
+        description: "Zeigt aktuelles Wetter von der macOS Wetter-App",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
+        name: "get_news",
+        description: "Zeigt aktuelle Nachrichten von der Tagesschau (oder anderer Quelle)",
+        inputSchema: {
+          type: "object",
+          properties: {
+            source: {
+              type: "string",
+              description: "Nachrichtenquelle (default: 'tagesschau')",
+              default: "tagesschau",
+            },
+          },
         },
       },
     ],
@@ -278,6 +372,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const result = await getUnreadMail();
         return {
           content: [{ type: "text", text: result || "Keine ungelesenen E-Mails" }],
+        };
+      }
+
+      case "get_weather": {
+        const result = await getWeather();
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "get_news": {
+        const source = (args?.source as string) || "tagesschau";
+        const result = await getNews(source);
+        return {
+          content: [{ type: "text", text: result }],
         };
       }
 
