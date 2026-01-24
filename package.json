@@ -1,0 +1,35 @@
+{
+  "name": "briefing-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server für personalisierte Briefings aus Mac-Diensten (Kalender, Erinnerungen, Mail, News)",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "briefing-mcp-server": "./build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node build/index.js",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "briefing",
+    "calendar",
+    "reminders",
+    "mail",
+    "news",
+    "applescript",
+    "macos"
+  ],
+  "author": "Andreas Dietzel",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}
