@@ -1,11 +1,11 @@
 {
-  "name": "perplexity-mcp-briefing",
+  "name": "mcp-document-intelligence",
   "version": "1.0.0",
-  "description": "Professional MCP Server for Perplexity: Automated daily briefings from macOS data sources (Weather, Calendar, Reminders, Mail, News)",
+  "description": "MCP Server with PDF OCR and intelligent filename generation",
   "type": "module",
   "main": "build/index.js",
   "bin": {
-    "perplexity-mcp-briefing": "./build/index.js"
+    "mcp-document-intelligence": "./build/index.js"
   },
   "scripts": {
     "build": "tsc",
@@ -16,15 +16,12 @@
   "keywords": [
     "mcp",
     "model-context-protocol",
-    "perplexity",
-    "briefing",
-    "calendar",
-    "reminders",
-    "mail",
-    "news",
-    "weather",
-    "macos",
-    "productivity"
+    "pdf",
+    "ocr",
+    "document-management",
+    "filename-generation",
+    "tesseract",
+    "pdf-parse"
   ],
   "author": "",
   "license": "MIT",

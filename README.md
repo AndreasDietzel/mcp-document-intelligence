@@ -1,8 +1,8 @@
 # MCP Document Intelligence Server
 
-**Model Context Protocol Server with PDF OCR, intelligent filename generation, and macOS data integration**
+**Model Context Protocol Server with PDF OCR and intelligent filename generation**
 
-Combines filesystem access with intelligent document processing: Extract text from PDFs (including OCR for scanned documents), suggest smart filenames, and integrate macOS data sources (Calendar, Mail, Reminders).
+Intelligent document processing for PDFs: Extract text from PDFs (including OCR for scanned documents) and suggest smart, structured filenames based on document content.
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -19,13 +19,6 @@ Combines filesystem access with intelligent document processing: Extract text fr
   - Document dates (DD.MM.YYYY, YYYY-MM-DD)
   - Reference numbers (Invoice#, Customer#, Order#, Contract#)
   - Keywords (Invoice, Contract, Company names)
-
-### 📅 macOS Integration
-- **Calendar**: Events from Calendar.app
-- **Reminders**: Due reminders from Reminders.app
-- **Mail**: Inbox messages
-- **Weather**: Open-Meteo API (no API key required)
-- **News**: RSS feed integration
 
 ---
 
@@ -112,15 +105,6 @@ Analyzes a PDF document and suggests an intelligent filename.
 }
 ```
 
-### macOS Data Tools
-
-- `get_briefing` - Complete briefing with all data sources
-- `get_weather` - Current weather information
-- `get_calendar_events` - Calendar events for timeframe
-- `get_reminders` - Today's due reminders
-- `get_unread_mail` - Inbox messages
-- `get_news` - Current news headlines
-
 ---
 
 ## 🔧 Use Cases
@@ -141,13 +125,7 @@ Create a briefing for today
 ### Workflow Automation
 1. Scan document → Save with timestamp
 2. AI analyzes PDF → Extracts metadata
-3. AI suggests structured filename
-4. Optional: Auto-rename or file to folder
-
----
-
-## 🛠️ Architecture
-
+3. A
 ### Dependencies
 - **pdf-parse**: PDF text extraction
 - **tesseract.js**: OCR for scanned documents
@@ -157,8 +135,7 @@ Create a briefing for today
 ### File Structure
 ```
 mcp-document-intelligence/
-├── src/
-│   └── index.ts          # Main server implementation
+├── src/on
 ├── build/                # Compiled output
 ├── package.json
 ├── tsconfig.json
@@ -189,8 +166,8 @@ The analyzer recognizes:
 ---
 
 ## 🤝 Contributing
-
-Contributions welcome! Areas for improvement:
+- ✅ **OCR processing on-device** - Tesseract.js runs locally
+- ✅ **No data transmission** - All processing happens locally
 
 - [ ] Additional document types (Word, Excel, Images)
 - [ ] More reference number patterns
@@ -214,7 +191,6 @@ MIT License - see [LICENSE](LICENSE) file
 - PDF parsing by [pdf-parse](https://www.npmjs.com/package/pdf-parse)
 - OCR by [Tesseract.js](https://tesseract.projectnaptha.com/)
 - Weather data from [Open-Meteo](https://open-meteo.com/)
-
 ---
 
 **Made for intelligent document workflows** 📄✨
