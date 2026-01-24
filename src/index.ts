@@ -160,6 +160,18 @@ async function analyzePdfAndSuggestFilename(filePath: string): Promise<string> {
       }
     }
     
+    
+    // Wenn kein Datum im Text gefunden, nutze Erstelldatum der Datei
+    let fileCreationDate = "";
+    if (!documentDate) {
+      try {
+        const stats = fs.statSync(filePath);
+        fileCreationDate = stats.birthtime.toISOString().split("T")[0];
+        documentDate = fileCreationDate;
+      } catch (error) {
+        console.error("Could not read file creation date");
+      }
+    }
     // Extrahiere Referenznummern (Rechnungs-Nr, Kunden-Nr, etc.)
     const referencePatterns = [
       /(?:Rechnungs[-\s]?Nr\.?|Invoice)[:\s]+([A-Z0-9-]+)/gi,
@@ -224,6 +236,7 @@ async function analyzePdfAndSuggestFilename(filePath: string): Promise<string> {
       originalFilename: path.basename(filePath),
       suggestedFilename,
       documentDate,
+      fileCreationDate,
       references,
       keywords,
       scannerDatePreserved: !!datePrefix,

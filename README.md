@@ -116,11 +116,7 @@ analyze_pdf_and_suggest_filename with filePath: "/path/to/scanned_invoice.pdf"
 → Extracts invoice number, date, company name and suggests:
 `2024-01-24_INV-2024-001_rechnung_telekom.pdf`
 
-### Daily Briefing
 ```
-Create a briefing for today
-```
-→ Weather, appointments, reminders, emails, news
 
 ### Workflow Automation
 1. Scan document → Save with timestamp
@@ -160,7 +156,7 @@ The analyzer recognizes:
 
 - ✅ **All data stays local** - No external API calls for personal data
 - ✅ **OCR processing on-device** - Tesseract.js runs locally
-- ✅ **macOS permissions required** - Calendar, Reminders, Mail access
+- ✅ **
 - ✅ **No logging of document content**
 
 ---
