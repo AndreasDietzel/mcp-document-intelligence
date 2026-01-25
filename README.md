@@ -27,7 +27,7 @@ Multi-format document intelligence: PDF, DOCX, Pages, Images, TXT Extract text f
 ### Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/mcp-document-intelligence.git
+git clone https://github.com/AndreasDietzel/mcp-document-intelligence.git
 cd mcp-document-intelligence
 npm install
 npm run build
@@ -42,7 +42,7 @@ Add to your MCP client configuration (e.g., Perplexity, Claude Desktop):
   "mcpServers": {
     "document-intelligence": {
       "command": "node",
-      "args": ["/ABSOLUTE/PATH/TO/mcp-document-intelligence/build/index.js"],
+      "args": ["/path/to/mcp-document-intelligence/build/index.js"],
       "env": {
         "NODE_ENV": "production"
       }
@@ -80,7 +80,7 @@ To use both servers together:
 
 ## 📋 Available Tools
 
-### `analyze_pdf_and_suggest_filename`
+### `analyze_document`
 
 Analyzes a PDF document and suggests an intelligent filename.
 
@@ -111,7 +111,7 @@ Analyzes a PDF document and suggests an intelligent filename.
 
 ### Document Management
 ```
-analyze_pdf_and_suggest_filename with filePath: "/path/to/scanned_invoice.pdf"
+analyze_document with filePath: "/path/to/scanned_invoice.pdf"
 ```
 → Extracts invoice number, date, company name and suggests:
 `2024-01-24_INV-2024-001_rechnung_telekom.pdf`
