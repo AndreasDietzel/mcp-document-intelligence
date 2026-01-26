@@ -1252,9 +1252,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("MCP Document Intelligence Server v4.0 running - All features enabled");
+  try {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("MCP Document Intelligence Server v4.0.1 running - All features enabled");
+  } catch (error: any) {
+    console.error("Fatal error starting server:", error.message);
+    console.error(error.stack);
+    process.exit(1);
+  }
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error("Unhandled error in main:", error);
+  process.exit(1);
+});
