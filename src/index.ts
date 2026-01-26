@@ -103,18 +103,22 @@ function analyzeTextContent(text: string, filePath: string, datePrefix: string):
     parts.push(keywords.slice(0, 3).join("_"));
   }
   
-  const suggestedFilename = parts.length > 0 
+  // Wenn keine neuen Informationen gefunden wurden, behalte Original-Namen
+  const hasNewInfo = references.length > 0 || keywords.length > 0 || (!datePrefix && documentDate);
+  const originalName = path.basename(filePath);
+  const suggestedFilename = hasNewInfo && parts.length > 0 
     ? parts.join("_") + fileExtension
-    : `dokument_${Date.now()}${fileExtension}`;
+    : originalName;
   
   return {
-    originalFilename: path.basename(filePath),
+    originalFilename: originalName,
     suggestedFilename,
     documentDate,
     fileCreationDate,
     references,
     keywords,
     scannerDatePreserved: !!datePrefix,
+    renameRecommended: hasNewInfo,
     textLength: text.length,
     documentType: fileExtension.slice(1),
     preview: text.substring(0, 500)
