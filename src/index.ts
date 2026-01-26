@@ -978,7 +978,7 @@ function exportMetadata(documents: any[], format: "json" | "csv" = "json"): stri
 const server = new Server(
   {
     name: "mcp-document-intelligence",
-    version: "4.0.0",
+    version: "4.0.1",
   },
   {
     capabilities: {

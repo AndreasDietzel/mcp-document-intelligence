@@ -8,7 +8,7 @@ Fully automated document intelligence with advanced batch processing: Recursivel
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.0.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
+[![Version](https://img.shields.io/badge/Version-4.0.1-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
 [![Perplexity](https://img.shields.io/badge/Perplexity-Compatible-purple)](https://www.perplexity.ai/)
 [![Claude](https://img.shields.io/badge/Claude-Compatible-orange)](https://claude.ai/)
 

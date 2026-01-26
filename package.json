@@ -1,6 +1,6 @@
 {
   "name": "mcp-document-intelligence",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "MCP Server with PDF OCR and intelligent filename generation",
   "type": "module",
   "main": "build/index.js",
