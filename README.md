@@ -1,17 +1,24 @@
 # MCP Document Intelligence Server
 
-**Model Context Protocol Server with PDF OCR and intelligent filename generation**
+**Model Context Protocol Server with Batch Document Processing & Intelligent File Organization**
 
-Multi-format document intelligence: PDF, DOCX, Pages, Images, TXT Extract text from various document formats (including OCR for scanned documents) and suggest smart, structured filenames based on document content.
+Automated document intelligence with batch processing: Scan entire folders, extract metadata from PDFs, DOCX, Pages, images and text files (with OCR for scanned documents), suggest intelligent filenames, and automatically organize documents into a structured folder hierarchy.
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-3.0.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
 
 ---
 
 ## 🎯 Features
 
-### 📄 Multi-Format Document Intelligence
+### � Batch Document Processing (v3.0)
+- **Folder Scanning**: Analyze entire folders in one operation
+- **Batch Organization**: Rename and move multiple files automatically
+- **Smart Folder Structure**: Auto-generate organized folder hierarchies
+- **Workflow Automation**: Scan → Analyze → Organize in one go
+
+### �📄 Multi-Format Document Intelligence
 - **Text Extraction**: Extract text from PDF, DOCX, Pages, Images, TXT
 - **OCR Support**: Tesseract.js for scanned documents
 - **Smart Filename Suggestions**: Automatically extracts:
@@ -82,7 +89,7 @@ To use both servers together:
 
 ### `analyze_document`
 
-Analyzes a PDF document and suggests an intelligent filename.
+Analyzes a single document and suggests an intelligent filename.
 
 **Input:**
 ```json
@@ -105,32 +112,137 @@ Analyzes a PDF document and suggests an intelligent filename.
 }
 ```
 
+### `analyze_folder` ✨ NEW in v3.0
+
+Analyzes ALL documents in a folder (batch processing).
+
+**Input:**
+```json
+{
+  "folderPath": "/path/to/folder"
+}
+```
+
+**Output:**
+```json
+{
+  "folderPath": "/path/to/folder",
+  "totalFiles": 15,
+  "documents": [
+    { "originalPath": "...", "suggestedFilename": "...", "metadata": {...} },
+    ...
+  ]
+}
+```
+
+### `suggest_folder_structure` ✨ NEW in v3.0
+
+Suggests intelligent folder organization based on analyzed documents.
+
+**Input:**
+```json
+{
+  "documents": [ /* array from analyze_folder */ ]
+}
+```
+
+**Output:**
+```json
+{
+  "structure": {
+    "2024": {
+      "Rechnungen": ["Telekom", "Vodafone"],
+      "Vertraege": ["..."]
+    }
+  },
+  "assignments": [
+    {
+      "originalPath": "/path/scan001.pdf",
+      "targetFolder": "2024/Rechnungen/Telekom",
+      "newFilename": "2024-01-24_RE-123_rechnung_telekom.pdf"
+    }
+  ]
+}
+```
+
+### `batch_organize` ✨ NEW in v3.0
+
+Executes batch renaming and moving of files.
+
+**Input:**
+```json
+{
+  "baseFolder": "/path/to/organized",
+  "operations": [
+    {
+      "originalPath": "/path/scan001.pdf",
+      "targetFolder": "2024/Rechnungen/Telekom",
+      "newFilename": "2024-01-24_RE-123_rechnung_telekom.pdf"
+    }
+  ]
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "processed": 15,
+  "failed": 0,
+  "results": [...]
+}
+```
+
 ---
 
 ## 🔧 Use Cases
 
-### Document Management
+### Single Document Analysis
 ```
 analyze_document with filePath: "/path/to/scanned_invoice.pdf"
 ```
 → Extracts invoice number, date, company name and suggests:
 `2024-01-24_INV-2024-001_rechnung_telekom.pdf`
 
+### Batch Document Organization (NEW v3.0)
+```
+1. analyze_folder with folderPath: "/path/to/Scans/Inbox"
+   → Scans all documents, extracts metadata
+
+2. suggest_folder_structure with documents from step 1
+   → AI suggests: 2024/Rechnungen/Telekom, 2024/Vertraege/Vodafone, etc.
+
+3. batch_organize with suggested structure
+   → Renames all files and organizes into folders automatically
 ```
 
+**Complete Workflow:**
+1. Scanner saves to "Inbox" folder
+2. AI analyzes ALL documents (batch)
+3. AI suggests organized structure
+4. User confirms → Files auto-organized in seconds
+
 ### Workflow Automation
-1. Scan document → Save with timestamp
-2. AI analyzes PDF → Extracts metadata
-3. A
+- **Before**: Manual sorting of 100+ scanned documents
+- **After**: One command → Complete organization in seconds
+- **Perfect for**: Tax documents, invoices, contracts, receipts
+
+---
+
+## 🛠️ Technical Details
+
 ### Dependencies
 - **pdf-parse**: PDF text extraction
-- **tesseract.js**: OCR for scanned documents
+- **mammoth**: DOCX document processing
+- **adm-zip**: Pages document extraction
+- **tesseract.js**: OCR for scanned documents and images
 - **@modelcontextprotocol/sdk**: MCP protocol implementation
 
 ### File Structure
 ```
 mcp-document-intelligence/
-├── src/on
+├── src/
+│   └── index.ts          # Main server implementation
 ├── build/                # Compiled output
 ├── package.json
 ├── tsconfig.json
@@ -149,27 +261,34 @@ The analyzer recognizes:
   - `Vertrag-Nr: XXX` / `Contract: XXX`
 - **Keywords**: Invoice, Contract, Offer, Order, common company names
 
+### Folder Structure Generation
+
+Automatically groups documents by:
+- **Year**: Extracted from document date
+- **Category**: Rechnungen, Verträge, Angebote, Mahnungen, etc.
+- **Company**: Telekom, Vodafone, Amazon, PayPal, Banks, etc.
+
 ---
 
 ## 🔒 Privacy & Security
 
 - ✅ **All data stays local** - No external API calls for personal data
 - ✅ **OCR processing on-device** - Tesseract.js runs locally
-- ✅ **
+- ✅ **No data transmission** - All processing happens locally
 - ✅ **No logging of document content**
 
 ---
 
-## 🤝 Contributing
-- ✅ **OCR processing on-device** - Tesseract.js runs locally
-- ✅ **No data transmission** - All processing happens locally
+## 🚀 Roadmap
 
-- [ ] Additional document types (Word, Excel, Images)
-- [ ] More reference number patterns
+- [x] Multi-format document support (PDF, DOCX, Pages, Images, TXT)
+- [x] Batch processing support
+- [x] Auto-filing to folders based on content
 - [ ] Configurable naming templates
-- [ ] Batch processing support
-- [ ] Auto-filing to folders based on content
+- [ ] Custom reference number patterns
+- [ ] Excel/CSV document support
 - [ ] Integration with document management systems
+- [ ] Machine learning for improved categorization
 
 ---
 
