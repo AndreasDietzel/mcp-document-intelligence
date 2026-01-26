@@ -271,10 +271,243 @@ async function analyzeDocument(filePath: string): Promise<string> {
   }
 }
 
+// Analysiere einzelne Datei und gebe strukturiertes Objekt zurück (für Batch-Processing)
+async function analyzeDocumentStructured(filePath: string): Promise<any> {
+  const result = await analyzeDocument(filePath);
+  try {
+    return JSON.parse(result);
+  } catch (error) {
+    return { error: result, filePath };
+  }
+}
+
+// Batch-Analyse eines gesamten Ordners
+async function analyzeFolderBatch(folderPath: string): Promise<string> {
+  try {
+    if (!fs.existsSync(folderPath)) {
+      return JSON.stringify({ error: `Folder not found: ${folderPath}` }, null, 2);
+    }
+    
+    const stats = fs.statSync(folderPath);
+    if (!stats.isDirectory()) {
+      return JSON.stringify({ error: `Path is not a directory: ${folderPath}` }, null, 2);
+    }
+    
+    const files = fs.readdirSync(folderPath);
+    const supportedExtensions = [".pdf", ".docx", ".pages", ".png", ".jpg", ".jpeg", ".txt"];
+    
+    const documentFiles = files.filter(file => {
+      const ext = path.extname(file).toLowerCase();
+      return supportedExtensions.includes(ext);
+    });
+    
+    if (documentFiles.length === 0) {
+      return JSON.stringify({ 
+        message: "No supported documents found in folder",
+        folderPath,
+        supportedExtensions 
+      }, null, 2);
+    }
+    
+    const results = [];
+    for (const file of documentFiles) {
+      const filePath = path.join(folderPath, file);
+      try {
+        const analysis = await analyzeDocumentStructured(filePath);
+        results.push({
+          originalPath: filePath,
+          ...analysis
+        });
+      } catch (error: any) {
+        results.push({
+          originalPath: filePath,
+          error: error.message
+        });
+      }
+    }
+    
+    return JSON.stringify({
+      folderPath,
+      totalFiles: documentFiles.length,
+      documents: results
+    }, null, 2);
+  } catch (error: any) {
+    return JSON.stringify({ error: `Error analyzing folder: ${error.message}` }, null, 2);
+  }
+}
+
+// Ordnerstruktur-Vorschlag basierend auf Dokumenten-Metadaten
+function suggestFolderStructure(documents: any[]): string {
+  try {
+    const structure: any = {};
+    const assignments: any[] = [];
+    
+    // Gruppiere nach Jahr
+    const years = new Set<string>();
+    const categories = new Set<string>();
+    const companies = new Set<string>();
+    
+    documents.forEach(doc => {
+      if (doc.error) return;
+      
+      // Jahr extrahieren
+      let year = "Unbekannt";
+      if (doc.documentDate) {
+        const yearMatch = doc.documentDate.match(/(\d{4})/);
+        if (yearMatch) year = yearMatch[1];
+      }
+      years.add(year);
+      
+      // Kategorie aus Keywords
+      const docTypeKeywords = ["rechnung", "invoice", "vertrag", "contract", "angebot", "offer", "mahnung", "bestellung", "order"];
+      const foundType = doc.keywords?.find((kw: string) => docTypeKeywords.includes(kw.toLowerCase()));
+      if (foundType) {
+        const category = foundType.charAt(0).toUpperCase() + foundType.slice(1) + "en";
+        categories.add(category);
+      }
+      
+      // Firma aus Keywords
+      const companyKeywords = ["telekom", "vodafone", "amazon", "paypal", "bank", "versicherung"];
+      const foundCompany = doc.keywords?.find((kw: string) => companyKeywords.includes(kw.toLowerCase()));
+      if (foundCompany) {
+        companies.add(foundCompany.charAt(0).toUpperCase() + foundCompany.slice(1));
+      }
+    });
+    
+    // Baue Struktur
+    years.forEach(year => {
+      structure[year] = {};
+      categories.forEach(category => {
+        structure[year][category] = [];
+        companies.forEach(company => {
+          structure[year][category].push(company);
+        });
+      });
+    });
+    
+    // Ordne Dateien zu
+    documents.forEach(doc => {
+      if (doc.error) {
+        assignments.push({
+          originalPath: doc.originalPath,
+          targetFolder: "Fehler",
+          newFilename: path.basename(doc.originalPath),
+          reason: "Analyse fehlgeschlagen"
+        });
+        return;
+      }
+      
+      let year = "Unbekannt";
+      if (doc.documentDate) {
+        const yearMatch = doc.documentDate.match(/(\d{4})/);
+        if (yearMatch) year = yearMatch[1];
+      }
+      
+      const docTypeKeywords = ["rechnung", "invoice", "vertrag", "contract", "angebot", "offer", "mahnung", "bestellung", "order"];
+      const foundType = doc.keywords?.find((kw: string) => docTypeKeywords.includes(kw.toLowerCase()));
+      const category = foundType ? foundType.charAt(0).toUpperCase() + foundType.slice(1) + "en" : "Sonstiges";
+      
+      const companyKeywords = ["telekom", "vodafone", "amazon", "paypal", "bank", "versicherung"];
+      const foundCompany = doc.keywords?.find((kw: string) => companyKeywords.includes(kw.toLowerCase()));
+      const company = foundCompany ? foundCompany.charAt(0).toUpperCase() + foundCompany.slice(1) : "";
+      
+      const targetPath = company 
+        ? path.join(year, category, company)
+        : path.join(year, category);
+      
+      assignments.push({
+        originalPath: doc.originalPath,
+        targetFolder: targetPath,
+        newFilename: doc.suggestedFilename,
+        metadata: {
+          date: doc.documentDate,
+          references: doc.references,
+          keywords: doc.keywords
+        }
+      });
+    });
+    
+    return JSON.stringify({
+      structure,
+      assignments,
+      summary: {
+        totalDocuments: documents.length,
+        years: Array.from(years),
+        categories: Array.from(categories),
+        companies: Array.from(companies)
+      }
+    }, null, 2);
+  } catch (error: any) {
+    return JSON.stringify({ error: `Error suggesting structure: ${error.message}` }, null, 2);
+  }
+}
+
+// Batch-Organisation: Umbenennen und Verschieben von Dateien
+async function batchOrganize(baseFolder: string, operations: any[]): Promise<string> {
+  try {
+    const results = [];
+    const errors = [];
+    
+    for (const op of operations) {
+      try {
+        const targetDir = path.join(baseFolder, op.targetFolder);
+        const targetPath = path.join(targetDir, op.newFilename);
+        
+        // Erstelle Zielverzeichnis falls nicht vorhanden
+        if (!fs.existsSync(targetDir)) {
+          fs.mkdirSync(targetDir, { recursive: true });
+        }
+        
+        // Prüfe ob Quelldatei existiert
+        if (!fs.existsSync(op.originalPath)) {
+          errors.push({
+            operation: op,
+            error: "Source file not found"
+          });
+          continue;
+        }
+        
+        // Prüfe ob Zieldatei bereits existiert
+        if (fs.existsSync(targetPath)) {
+          errors.push({
+            operation: op,
+            error: "Target file already exists"
+          });
+          continue;
+        }
+        
+        // Verschiebe und benenne um
+        fs.renameSync(op.originalPath, targetPath);
+        
+        results.push({
+          success: true,
+          from: op.originalPath,
+          to: targetPath
+        });
+      } catch (error: any) {
+        errors.push({
+          operation: op,
+          error: error.message
+        });
+      }
+    }
+    
+    return JSON.stringify({
+      success: errors.length === 0,
+      processed: results.length,
+      failed: errors.length,
+      results,
+      errors
+    }, null, 2);
+  } catch (error: any) {
+    return JSON.stringify({ error: `Error in batch organize: ${error.message}` }, null, 2);
+  }
+}
+
 const server = new Server(
   {
     name: "mcp-document-intelligence",
-    version: "2.0.0",
+    version: "3.0.0",
   },
   {
     capabilities: {
@@ -300,6 +533,52 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["filePath"]
         },
       },
+      {
+        name: "analyze_folder",
+        description: "Analysiert ALLE Dokumente in einem Ordner (Batch-Verarbeitung). Scannt den Ordner nach unterstützten Dateiformaten und extrahiert Metadaten aus allen gefundenen Dokumenten.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            folderPath: {
+              type: "string",
+              description: "Vollständiger Pfad zum Ordner, der analysiert werden soll"
+            }
+          },
+          required: ["folderPath"]
+        },
+      },
+      {
+        name: "suggest_folder_structure",
+        description: "Schlägt eine intelligente Ordnerstruktur basierend auf analysierten Dokumenten vor. Gruppiert nach Jahr, Kategorie (Rechnungen, Verträge, etc.) und Firma.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            documents: {
+              type: "array",
+              description: "Array von analysierten Dokumenten (Output von analyze_folder)"
+            }
+          },
+          required: ["documents"]
+        },
+      },
+      {
+        name: "batch_organize",
+        description: "Führt Batch-Umbenennungen und Verschiebungen von Dateien durch. Erstellt automatisch fehlende Unterordner.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            baseFolder: {
+              type: "string",
+              description: "Basis-Ordner, unter dem die neue Struktur erstellt werden soll"
+            },
+            operations: {
+              type: "array",
+              description: "Array von Operationen mit originalPath, targetFolder und newFilename"
+            }
+          },
+          required: ["baseFolder", "operations"]
+        },
+      },
     ],
   };
 });
@@ -320,6 +599,43 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "analyze_folder": {
+        const folderPath = args?.folderPath as string;
+        if (!folderPath) {
+          throw new Error("folderPath is required");
+        }
+        const result = await analyzeFolderBatch(folderPath);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "suggest_folder_structure": {
+        const documents = args?.documents as any[];
+        if (!documents || !Array.isArray(documents)) {
+          throw new Error("documents array is required");
+        }
+        const result = suggestFolderStructure(documents);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "batch_organize": {
+        const baseFolder = args?.baseFolder as string;
+        const operations = args?.operations as any[];
+        if (!baseFolder) {
+          throw new Error("baseFolder is required");
+        }
+        if (!operations || !Array.isArray(operations)) {
+          throw new Error("operations array is required");
+        }
+        const result = await batchOrganize(baseFolder, operations);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -334,7 +650,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("MCP Document Intelligence Server v2.0 running - Multi-format support enabled");
+  console.error("MCP Document Intelligence Server v3.0 running - Batch processing enabled");
 }
 
 main().catch(console.error);
