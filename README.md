@@ -2,11 +2,15 @@
 
 **Model Context Protocol Server with Batch Document Processing & Intelligent File Organization**
 
+🎯 **Designed for [Perplexity Desktop](https://www.perplexity.ai/) and [Claude Desktop](https://claude.ai/download)** – Supercharge your AI assistant with intelligent document organization capabilities.
+
 Automated document intelligence with batch processing: Scan entire folders, extract metadata from PDFs, DOCX, Pages, images and text files (with OCR for scanned documents), suggest intelligent filenames, and automatically organize documents into a structured folder hierarchy.
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-3.0.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
+[![Perplexity](https://img.shields.io/badge/Perplexity-Compatible-purple)](https://www.perplexity.ai/)
+[![Claude](https://img.shields.io/badge/Claude-Compatible-orange)](https://claude.ai/)
 
 ---
 
@@ -31,6 +35,14 @@ Automated document intelligence with batch processing: Scan entire folders, extr
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+You need one of these AI desktop clients:
+- **[Perplexity Desktop App](https://www.perplexity.ai/)** (macOS/Windows)
+- **[Claude Desktop App](https://claude.ai/download)** (macOS/Windows)
+
+Both support the Model Context Protocol (MCP) for extending AI capabilities with custom tools.
+
 ### Installation
 
 ```bash
@@ -42,7 +54,10 @@ npm run build
 
 ### Configuration
 
-Add to your MCP client configuration (e.g., Perplexity, Claude Desktop):
+Add to your MCP client configuration:
+
+**For Perplexity Desktop:**
+Location: `~/Library/Application Support/Perplexity/perplexity-config.json` (macOS)
 
 ```json
 {
@@ -58,19 +73,34 @@ Add to your MCP client configuration (e.g., Perplexity, Claude Desktop):
 }
 ```
 
-### MCP Filesystem Integration
-
-This server builds upon the official [MCP Filesystem Server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) from the Model Context Protocol repository. The filesystem functionality is provided separately and should be configured alongside this server for complete document management capabilities.
-
-To use both servers together:
+**For Claude Desktop:**
+Location: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
 ```json
 {
   "mcpServers": {
     "document-intelligence": {
       "command": "node",
-      "args": ["/path/to/mcp-document-intelligence/build/index.js"]
-    },
+      "args": ["/path/to/mcp-document-intelligence/build/index.js"],
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}
+```
+
+**Restart your AI client** after updating the configuration.
+
+### MCP Filesystem Integration
+
+This server works best alongside the official [MCP Filesystem Server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem), which provides file browsing and management capabilities to your AI assistant.
+
+**Recommended Setup for Perplexity/Claude:**
+
+```json
+{
+  "mcpServers": {
     "filesystem": {
       "command": "npx",
       "args": [
@@ -78,10 +108,19 @@ To use both servers together:
         "@modelcontextprotocol/server-filesystem",
         "/path/to/your/documents"
       ]
+    },
+    "document-intelligence": {
+      "command": "node",
+      "args": ["/path/to/mcp-document-intelligence/build/index.js"]
     }
   }
 }
 ```
+
+With both servers configured, you can:
+1. **Ask your AI** to find documents in your folders (filesystem server)
+2. **Analyze and organize** them automatically (document-intelligence server)
+3. **Complete workflow** handled by natural conversation with Perplexity/Claude
 
 ---
 
@@ -205,22 +244,38 @@ analyze_document with filePath: "/path/to/scanned_invoice.pdf"
 `2024-01-24_INV-2024-001_rechnung_telekom.pdf`
 
 ### Batch Document Organization (NEW v3.0)
+
+**Example conversation with Perplexity or Claude:**
+
 ```
-1. analyze_folder with folderPath: "/path/to/Scans/Inbox"
-   → Scans all documents, extracts metadata
+You: "Analyze all documents in my Scans/Inbox folder"
 
-2. suggest_folder_structure with documents from step 1
-   → AI suggests: 2024/Rechnungen/Telekom, 2024/Vertraege/Vodafone, etc.
+AI (using analyze_folder):
+   → Found 15 documents
+   → Extracted: dates, invoice numbers, companies
 
-3. batch_organize with suggested structure
-   → Renames all files and organizes into folders automatically
+AI (using suggest_folder_structure):
+   → Proposes: 2024/Rechnungen/Telekom, 2024/Vertraege/Vodafone, etc.
+   → Shows: Complete list of file renames and target folders
+
+AI: "I found 15 documents. Should I organize them into 
+     2024/Rechnungen, 2024/Vertraege with smart filenames?"
+
+You: "Yes, do it"
+
+AI (using batch_organize):
+   → Renames all files
+   → Creates folder structure
+   → Moves everything automatically
+
+AI: "Done! Organized 15 documents in 2 seconds."
 ```
 
 **Complete Workflow:**
 1. Scanner saves to "Inbox" folder
-2. AI analyzes ALL documents (batch)
+2. Tell Perplexity/Claude to analyze the folder
 3. AI suggests organized structure
-4. User confirms → Files auto-organized in seconds
+4. You confirm → Files auto-organized instantly
 
 ### Workflow Automation
 - **Before**: Manual sorting of 100+ scanned documents
