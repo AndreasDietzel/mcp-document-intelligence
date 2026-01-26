@@ -528,6 +528,16 @@ async function analyzeFolderBatch(
         .map(file => path.join(folderPath, file));
     }
     
+    // ISO25010: Performance - Warn bei vielen Dateien
+    if (documentFiles.length > 100) {
+      console.error(`⚠️  Performance Warning: ${documentFiles.length} Dateien - kann lange dauern`);
+    }
+    
+    // ISO25010: Performance - Warn bei vielen Dateien
+    if (documentFiles.length > 100) {
+      console.error(`⚠️  Performance Warning: ${documentFiles.length} Dateien - kann lange dauern`);
+    }
+    
     if (documentFiles.length === 0) {
       return JSON.stringify({ 
         message: "No supported documents found in folder",
@@ -538,11 +548,29 @@ async function analyzeFolderBatch(
       }, null, 2);
     }
     
+    // ISO25010: Reliability - Limit für Stabilität
+    const maxFiles = 500;
+    if (documentFiles.length > maxFiles) {
+      return JSON.stringify({
+        error: `Too many files (${documentFiles.length}). Maximum: ${maxFiles}`,
+        suggestion: "Use filters (fileTypes, keywords) or process subfolders separately",
+        folderPath
+      }, null, 2);
+    }
+    
     const results = [];
     const duplicates: { [hash: string]: string[] } = {};
+    const errors: Array<{file: string, error: string}> = [];
+    let processedCount = 0;
     
     for (const filePath of documentFiles) {
       try {
+        // ISO25010: Usability - Progress bei vielen Dateien
+        processedCount++;
+        if (documentFiles.length > 20 && processedCount % 10 === 0) {
+          console.error(`📊 Progress: ${processedCount}/${documentFiles.length} Dateien`);
+        }
+        
         // Duplikat-Erkennung (#4)
         const fileHash = calculateFileHash(filePath);
         if (fileHash) {
@@ -560,6 +588,10 @@ async function analyzeFolderBatch(
           ...analysis
         });
       } catch (error: any) {
+        // ISO25010: Reliability - Graceful degradation
+        const fileName = path.basename(filePath);
+        console.error(`⚠️  Error: ${fileName}: ${error.message}`);
+        errors.push({ file: fileName, error: error.message });
         results.push({
           originalPath: filePath,
           error: error.message,
@@ -574,9 +606,13 @@ async function analyzeFolderBatch(
       .filter(([hash, paths]) => paths.length > 1)
       .map(([hash, paths]) => ({ hash, files: paths, count: paths.length }));
     
+    // ISO25010: Usability - Informative Zusammenfassung
     return JSON.stringify({
       folderPath,
       totalFiles: documentFiles.length,
+      successfullyProcessed: results.filter(r => !r.error).length,
+      failed: errors.length,
+      errors: errors.length > 0 ? errors : undefined,
       recursive,
       filters: { fileTypes, keywords },
       documents: results,

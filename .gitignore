@@ -10,3 +10,13 @@ dist/
 !.example.json
 logs/
 data/
+
+# DATENSCHUTZ: Test-Daten und Backups nicht committen
+test-data/*.txt
+test-data/*.pdf
+test-data/*.docx
+test-data/*.pages
+test-data/*.jpg
+test-data/*.png
+test-data/*.jpeg
+.backup_*.json
