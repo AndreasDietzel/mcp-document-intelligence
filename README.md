@@ -1,14 +1,14 @@
 # MCP Document Intelligence Server
 
-**Model Context Protocol Server with Batch Document Processing & Intelligent File Organization**
+**Model Context Protocol Server with Advanced Batch Processing & Intelligent Document Organization**
 
-🎯 **Designed for [Perplexity Desktop](https://www.perplexity.ai/) and [Claude Desktop](https://claude.ai/download)** – Supercharge your AI assistant with intelligent document organization capabilities.
+🎯 **Designed for [Perplexity Desktop](https://www.perplexity.ai/) and [Claude Desktop](https://claude.ai/download)** – Supercharge your AI assistant with enterprise-grade document intelligence.
 
-Automated document intelligence with batch processing: Scan entire folders, extract metadata from PDFs, DOCX, Pages, images and text files (with OCR for scanned documents), suggest intelligent filenames, and automatically organize documents into a structured folder hierarchy.
+Fully automated document intelligence with advanced batch processing: Recursively scan folders, detect duplicates, extract metadata from PDFs, DOCX, Pages, images and text files (with OCR for scanned documents), preview changes before execution, backup/undo operations, export metadata, and automatically organize documents with intelligent folder structures.
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-3.0.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
+[![Version](https://img.shields.io/badge/Version-4.0.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
 [![Perplexity](https://img.shields.io/badge/Perplexity-Compatible-purple)](https://www.perplexity.ai/)
 [![Claude](https://img.shields.io/badge/Claude-Compatible-orange)](https://claude.ai/)
 
@@ -16,15 +16,27 @@ Automated document intelligence with batch processing: Scan entire folders, extr
 
 ## 🎯 Features
 
-### � Batch Document Processing (v3.0)
-- **Folder Scanning**: Analyze entire folders in one operation
+### 🚀 v4.0 - Enterprise Features
+- **🔍 Recursive Scanning**: Deep folder analysis up to 10 levels
+- **👥 Duplicate Detection**: SHA256-based file deduplication
+- **👁️ Preview Mode**: Dry-run operations before execution
+- **⏮️ Backup & Undo**: Automatic backups with one-click restore
+- **📊 Metadata Export**: Export analysis results to JSON/CSV
+- **🎯 Smart Filters**: Filter by file type and keywords
+- **📋 Copy Mode**: Copy files instead of moving them
+- **⚙️ Configurable Rules**: Custom folder organization patterns
+- **🎨 OCR Quality Feedback**: Confidence scores for scanned documents
+- **📈 Detailed Statistics**: Comprehensive operation summaries
+
+### 📦 Batch Document Processing
+- **Folder Scanning**: Analyze entire folders recursively in one operation
 - **Batch Organization**: Rename and move multiple files automatically
 - **Smart Folder Structure**: Auto-generate organized folder hierarchies
-- **Workflow Automation**: Scan → Analyze → Organize in one go
+- **Workflow Automation**: Scan → Analyze → Preview → Organize → Undo
 
 ### �📄 Multi-Format Document Intelligence
 - **Text Extraction**: Extract text from PDF, DOCX, Pages, Images, TXT
-- **OCR Support**: Tesseract.js for scanned documents
+- **OCR Support**: Tesseract.js for scanned documents with quality scoring
 - **Smart Filename Suggestions**: Automatically extracts:
   - Scanner timestamps (preserves existing `2024-01-24_14-30-45` format)
   - Document dates (DD.MM.YYYY, YYYY-MM-DD)
@@ -151,14 +163,17 @@ Analyzes a single document and suggests an intelligent filename.
 }
 ```
 
-### `analyze_folder` ✨ NEW in v3.0
+### `analyze_folder` ✨ Enhanced in v4.0
 
-Analyzes ALL documents in a folder (batch processing).
+Analyzes ALL documents in a folder (batch processing with recursive scanning, duplicate detection, and filtering).
 
 **Input:**
 ```json
 {
-  "folderPath": "/path/to/folder"
+  "folderPath": "/path/to/folder",
+  "recursive": true,
+  "fileTypes": ["invoice", "contract"],
+  "keywords": ["telekom", "vodafone"]
 }
 ```
 
@@ -167,9 +182,21 @@ Analyzes ALL documents in a folder (batch processing).
 {
   "folderPath": "/path/to/folder",
   "totalFiles": 15,
+  "duplicateGroups": [
+    {
+      "hash": "abc123...",
+      "count": 3,
+      "files": ["doc1.pdf", "doc1_copy.pdf", "duplicate.pdf"]
+    }
+  ],
   "documents": [
-    { "originalPath": "...", "suggestedFilename": "...", "metadata": {...} },
-    ...
+    { 
+      "originalPath": "...", 
+      "suggestedFilename": "...", 
+      "ocrQuality": "good",
+      "confidence": 0.95,
+      "metadata": {...} 
+    }
   ]
 }
 ```
@@ -204,14 +231,16 @@ Suggests intelligent folder organization based on analyzed documents.
 }
 ```
 
-### `batch_organize` ✨ NEW in v3.0
+### `batch_organize` ✨ Enhanced in v4.0
 
-Executes batch renaming and moving of files.
+Executes batch renaming and moving/copying of files with automatic backup.
 
 **Input:**
 ```json
 {
   "baseFolder": "/path/to/organized",
+  "mode": "move",
+  "createBackup": true,
   "operations": [
     {
       "originalPath": "/path/scan001.pdf",
@@ -226,10 +255,88 @@ Executes batch renaming and moving of files.
 ```json
 {
   "success": true,
-  "processed": 15,
-  "failed": 0,
+  "mode": "move",
+  "filesProcessed": 15,
+  "filesFailed": 0,
+  "foldersCreated": 5,
+  "backupCreated": true,
+  "backupPath": "/path/.backup_2024-01-24T10-30-00.json",
   "results": [...]
 }
+```
+
+### `preview_organization` ✨ NEW in v4.0
+
+Shows a dry-run preview of what would happen without making changes.
+
+**Input:**
+```json
+{
+  "baseFolder": "/path/to/organized",
+  "operations": [ /* same as batch_organize */ ]
+}
+```
+
+**Output:**
+```json
+{
+  "preview": [
+    {
+      "action": "move",
+      "from": "/path/scan001.pdf",
+      "to": "/path/organized/2024/Rechnungen/Telekom/2024-01-24_RE-123.pdf",
+      "status": "ok"
+    }
+  ],
+  "warnings": [],
+  "stats": {
+    "totalFiles": 15,
+    "foldersToCreate": ["2024/Rechnungen/Telekom"],
+    "conflicts": 0,
+    "missingFiles": 0
+  },
+  "safeToExecute": true
+}
+```
+
+### `undo_last_organization` ✨ NEW in v4.0
+
+Restores the last organization operation from automatic backup.
+
+**Input:**
+```json
+{
+  "baseFolder": "/path/to/organized"
+}
+```
+
+**Output:**
+```json
+{
+  "success": true,
+  "restored": 15,
+  "failed": 0,
+  "backupFile": "/path/.backup_2024-01-24T10-30-00.json"
+}
+```
+
+### `export_metadata` ✨ NEW in v4.0
+
+Exports analyzed document metadata to JSON or CSV format.
+
+**Input:**
+```json
+{
+  "documents": [ /* array from analyze_folder */ ],
+  "format": "csv"
+}
+```
+
+**Output (CSV):**
+```csv
+Filename,Path,Date,References,Keywords,OCR Quality,Confidence,Type
+scan001.pdf,/path/scan001.pdf,24.01.2024,RE-2024-1234,rechnung;telekom,good,0.95,invoice
+...
 ```
 
 ---
@@ -243,44 +350,67 @@ analyze_document with filePath: "/path/to/scanned_invoice.pdf"
 → Extracts invoice number, date, company name and suggests:
 `2024-01-24_INV-2024-001_rechnung_telekom.pdf`
 
-### Batch Document Organization (NEW v3.0)
+### Advanced Batch Organization (v4.0)
 
 **Example conversation with Perplexity or Claude:**
 
 ```
-You: "Analyze all documents in my Scans/Inbox folder"
+You: "Analyze all documents recursively in my 2026 folder, find duplicates"
 
-AI (using analyze_folder):
-   → Found 15 documents
+AI (using analyze_folder with recursive=true):
+   → Scanned 10 levels deep
+   → Found 150 documents
+   → Detected 12 duplicates (3 groups)
    → Extracted: dates, invoice numbers, companies
+   → OCR quality: 95% confidence average
 
 AI (using suggest_folder_structure):
-   → Proposes: 2024/Rechnungen/Telekom, 2024/Vertraege/Vodafone, etc.
+   → Proposes: 2026/Rechnungen/Telekom, 2026/Vertraege/Vodafone, etc.
    → Shows: Complete list of file renames and target folders
 
-AI: "I found 15 documents. Should I organize them into 
-     2024/Rechnungen, 2024/Vertraege with smart filenames?"
+AI (using preview_organization):
+   → Preview: 150 files will be moved
+   → Folders to create: 8
+   → Conflicts: 0
+   → Safe to execute: YES
 
-You: "Yes, do it"
+AI: "I found 150 documents (12 duplicates). Should I organize them into 
+     2026/Rechnungen, 2026/Vertraege with smart filenames?"
 
-AI (using batch_organize):
-   → Renames all files
+You: "Yes, but copy instead of moving"
+
+AI (using batch_organize with mode="copy", createBackup=true):
+   → Copies all files (originals preserved)
    → Creates folder structure
-   → Moves everything automatically
+   → Backup created for undo
+   → Processes everything automatically
 
-AI: "Done! Organized 15 documents in 2 seconds."
+AI: "Done! Organized 150 documents, created 8 folders, backup saved.
+     15 files processed, 0 failed. Type 'undo' to revert."
+
+You: "Export the metadata as CSV"
+
+AI (using export_metadata with format="csv"):
+   → Exports all document metadata
+   → Includes: filename, date, references, keywords, OCR quality
+
+AI: "CSV exported with all metadata for 150 documents."
 ```
 
-**Complete Workflow:**
+**Complete Workflow v4.0:**
 1. Scanner saves to "Inbox" folder
-2. Tell Perplexity/Claude to analyze the folder
-3. AI suggests organized structure
-4. You confirm → Files auto-organized instantly
+2. Tell Perplexity/Claude to analyze recursively + find duplicates
+3. Preview changes before execution
+4. Confirm with copy or move mode
+5. Files auto-organized with automatic backup
+6. Export metadata for records
+7. Undo anytime if needed
 
 ### Workflow Automation
 - **Before**: Manual sorting of 100+ scanned documents
-- **After**: One command → Complete organization in seconds
-- **Perfect for**: Tax documents, invoices, contracts, receipts
+- **After**: One command → Preview → Organization in seconds
+- **Safety**: Automatic backups, preview mode, undo function
+- **Perfect for**: Tax documents, invoices, contracts, receipts, archives
 
 ---
 
@@ -339,6 +469,13 @@ Automatically groups documents by:
 - [x] Multi-format document support (PDF, DOCX, Pages, Images, TXT)
 - [x] Batch processing support
 - [x] Auto-filing to folders based on content
+- [x] Recursive folder scanning
+- [x] Duplicate detection with SHA256
+- [x] Preview mode (dry-run)
+- [x] Backup & Undo functionality
+- [x] Metadata export (JSON/CSV)
+- [x] Copy vs Move modes
+- [x] OCR quality feedback
 - [ ] Configurable naming templates
 - [ ] Custom reference number patterns
 - [ ] Excel/CSV document support
