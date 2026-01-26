@@ -271,6 +271,118 @@ async function analyzeDocument(filePath: string): Promise<string> {
   }
 }
 
+// Levenshtein-Distanz für Ähnlichkeitsvergleich
+function levenshteinDistance(str1: string, str2: string): number {
+  const m = str1.length;
+  const n = str2.length;
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (str1[i - 1] === str2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1];
+      } else {
+        dp[i][j] = Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]) + 1;
+      }
+    }
+  }
+
+  return dp[m][n];
+}
+
+// Intelligente Ordnersuche mit Fuzzy-Matching
+function findFolderInTree(searchName: string, basePath: string, maxDepth: number = 5): string {
+  const normalizedSearch = searchName.toLowerCase().trim();
+  const matches: Array<{ path: string; score: number }> = [];
+
+  function searchRecursive(currentPath: string, depth: number) {
+    if (depth > maxDepth) return;
+    
+    try {
+      const items = fs.readdirSync(currentPath);
+      
+      for (const item of items) {
+        if (item.startsWith('.')) continue; // Skip hidden files
+        
+        const fullPath = path.join(currentPath, item);
+        
+        try {
+          const stats = fs.statSync(fullPath);
+          if (!stats.isDirectory()) continue;
+          
+          const itemLower = item.toLowerCase();
+          
+          // Exakte Übereinstimmung
+          if (itemLower === normalizedSearch) {
+            matches.push({ path: fullPath, score: 0 });
+            return;
+          }
+          
+          // Enthält den Suchbegriff
+          if (itemLower.includes(normalizedSearch) || normalizedSearch.includes(itemLower)) {
+            const distance = levenshteinDistance(normalizedSearch, itemLower);
+            matches.push({ path: fullPath, score: distance });
+          }
+          
+          // Fuzzy-Match basierend auf Levenshtein-Distanz
+          const distance = levenshteinDistance(normalizedSearch, itemLower);
+          if (distance <= 3) { // Maximal 3 Buchstaben Unterschied
+            matches.push({ path: fullPath, score: distance });
+          }
+          
+          // Rekursiv weiter suchen
+          searchRecursive(fullPath, depth + 1);
+        } catch (error) {
+          // Skip unreadable directories
+          continue;
+        }
+      }
+    } catch (error) {
+      // Skip unreadable directories
+      return;
+    }
+  }
+
+  searchRecursive(basePath, 0);
+  
+  // Sortiere nach Score (beste Treffer zuerst)
+  matches.sort((a, b) => a.score - b.score);
+  
+  if (matches.length === 0) {
+    return JSON.stringify({
+      found: false,
+      searchTerm: searchName,
+      basePath: basePath,
+      message: `No folder matching "${searchName}" found in the directory tree.`,
+      suggestions: []
+    }, null, 2);
+  }
+  
+  // Bester Treffer (Score 0 = exakte Übereinstimmung)
+  const bestMatch = matches[0];
+  const suggestions = matches.slice(0, 5).map(m => ({
+    path: m.path,
+    name: path.basename(m.path),
+    similarity: m.score === 0 ? "exact match" : `${m.score} character(s) difference`
+  }));
+  
+  return JSON.stringify({
+    found: true,
+    searchTerm: searchName,
+    basePath: basePath,
+    bestMatch: {
+      fullPath: bestMatch.path,
+      name: path.basename(bestMatch.path),
+      relativePath: bestMatch.path.replace(basePath, '').replace(/^\//, '')
+    },
+    totalMatches: matches.length,
+    suggestions: suggestions
+  }, null, 2);
+}
+
 // Analysiere einzelne Datei und gebe strukturiertes Objekt zurück (für Batch-Processing)
 async function analyzeDocumentStructured(filePath: string): Promise<any> {
   const result = await analyzeDocument(filePath);
@@ -507,7 +619,7 @@ async function batchOrganize(baseFolder: string, operations: any[]): Promise<str
 const server = new Server(
   {
     name: "mcp-document-intelligence",
-    version: "3.0.0",
+    version: "3.1.0",
   },
   {
     capabilities: {
@@ -519,6 +631,24 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
+      {
+        name: "find_folder",
+        description: "Sucht intelligent nach einem Ordner anhand des Namens. Unterstützt Fuzzy-Matching und schlägt ähnliche Ordner bei Tippfehlern vor. Perfekt wenn du nur den Ordnernamen (z.B. '2026') kennst, aber nicht den vollständigen Pfad.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            folderName: {
+              type: "string",
+              description: "Name des gesuchten Ordners (z.B. '2026', 'Rechnungen', 'Finnland')"
+            },
+            basePath: {
+              type: "string",
+              description: "Basis-Pfad für die Suche (z.B. '/Users/.../DateiArchiv'). Optional, verwendet Root wenn nicht angegeben."
+            }
+          },
+          required: ["folderName"]
+        },
+      },
       {
         name: "analyze_document",
         description: "Analysiert Dokumente (PDF, DOCX, Pages, Bilder, TXT) und schlägt intelligente Dateinamen vor. Extrahiert Datum, Referenznummern und Keywords aus dem Dokumentinhalt.",
@@ -588,6 +718,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     switch (name) {
+      case "find_folder": {
+        const folderName = args?.folderName as string;
+        const basePath = args?.basePath as string || "/Users/andreasdietzel/Library/Mobile Documents/com~apple~CloudDocs/DateiArchiv";
+        if (!folderName) {
+          throw new Error("folderName is required");
+        }
+        const result = findFolderInTree(folderName, basePath);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
       case "analyze_document": {
         const filePath = args?.filePath as string;
         if (!filePath) {
@@ -650,7 +792,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("MCP Document Intelligence Server v3.0 running - Batch processing enabled");
+  console.error("MCP Document Intelligence Server v3.1 running - Smart folder search enabled");
 }
 
 main().catch(console.error);
