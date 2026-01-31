@@ -9,7 +9,6 @@ import {
 import * as fs from "fs";
 import * as path from "path";
 import { createRequire } from "module";
-import { createWorker } from "tesseract.js";
 import mammoth from "mammoth";
 import AdmZip from "adm-zip";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -226,61 +225,51 @@ async function analyzePdf(filePath: string): Promise<string> {
 
 // Hilfsfunktion: Rendere PDF-Seiten als Bilder und führe OCR durch
 async function renderPdfPagesAndOCR(filePath: string): Promise<string> {
-  const dataBuffer = fs.readFileSync(filePath);
-  
-  // Lade PDF mit PDF.js
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(dataBuffer),
-    useSystemFonts: true,
-  });
-  
-  const pdfDocument = await loadingTask.promise;
-  const numPages = pdfDocument.numPages;
-  
-  console.error(`PDF has ${numPages} pages, processing with OCR...`);
-  
-  // Begrenze auf erste 5 Seiten für Performance
-  const maxPages = Math.min(numPages, 5);
-  const allText: string[] = [];
-  
-  // Initialisiere Tesseract Worker einmal
-  const worker = await createWorker("deu");
+  const { execSync } = require('child_process');
   
   try {
-    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
-      const page = await pdfDocument.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 2.0 }); // 2x für bessere OCR-Qualität
-      
-      // Erstelle Canvas
-      const canvas = createCanvas(viewport.width, viewport.height);
-      const context = canvas.getContext('2d') as any;
-      
-      // Rendere PDF-Seite auf Canvas
-      await page.render({
-        canvasContext: context,
-        viewport: viewport,
-        canvas: canvas as any, // Canvas-Objekt für PDF.js
-      }).promise;
-      
-      // Konvertiere Canvas zu Buffer (PNG)
-      const imageBuffer = canvas.toBuffer('image/png');
-      
-      // OCR auf dem Bild durchführen
-      const { data: { text } } = await worker.recognize(imageBuffer);
-      
-      if (text && text.trim().length > 0) {
-        allText.push(text.trim());
-        console.error(`Page ${pageNum}: extracted ${text.trim().length} characters`);
+    // Verwende pdftoppm (Teil von poppler-utils) um PDF in Bilder zu konvertieren
+    // Falls nicht installiert: brew install poppler
+    const tempDir = `/tmp/pdf-ocr-${Date.now()}`;
+    fs.mkdirSync(tempDir, { recursive: true });
+    
+    // Konvertiere PDF-Seiten zu PNG (first 5 pages, 300 DPI for better OCR)
+    execSync(`pdftoppm -png -r 300 -f 1 -l 5 "${filePath}" "${tempDir}/page"`, {
+      stdio: 'pipe'
+    });
+    
+    // Finde alle generierten PNG-Dateien
+    const pngFiles = fs.readdirSync(tempDir).filter(f => f.endsWith('.png')).sort();
+    
+    console.error(`PDF converted to ${pngFiles.length} PNG files, running OCR...`);
+    
+    const allText: string[] = [];
+    
+    for (const pngFile of pngFiles) {
+      const pngPath = path.join(tempDir, pngFile);
+      try {
+        // OCR mit nativem Tesseract durchführen
+        const ocrOutput = execSync(`tesseract "${pngPath}" stdout -l deu --psm 6`, { 
+          encoding: 'utf-8',
+          maxBuffer: 10 * 1024 * 1024 // 10MB Buffer
+        });
+        
+        if (ocrOutput && ocrOutput.trim().length > 0) {
+          allText.push(ocrOutput.trim());
+          console.error(`${pngFile}: extracted ${ocrOutput.trim().length} characters`);
+        }
+      } catch (ocrError: any) {
+        console.error(`OCR failed for ${pngFile}:`, ocrError.message);
       }
-      
-      // Cleanup
-      page.cleanup();
     }
-  } finally {
-    await worker.terminate();
+    
+    // Cleanup
+    execSync(`rm -rf "${tempDir}"`, { stdio: 'pipe' });
+    
+    return allText.join('\n\n');
+  } catch (error: any) {
+    throw new Error(`PDF to image conversion failed: ${error.message}`);
   }
-  
-  return allText.join('\n\n');
 }
 
 // DOCX Analyse
@@ -346,16 +335,19 @@ async function analyzePages(filePath: string): Promise<string> {
 // Bild Analyse
 async function analyzeImage(filePath: string): Promise<string> {
   try {
-    const worker = await createWorker("deu");
-    const { data: { text } } = await worker.recognize(filePath);
-    await worker.terminate();
+    // OCR mit nativem Tesseract durchführen
+    const { execSync } = require('child_process');
+    const ocrOutput = execSync(`tesseract "${filePath}" stdout -l deu --psm 6`, { 
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024 // 10MB Buffer
+    });
     
     const originalFilename = path.basename(filePath, path.extname(filePath));
     const scannerDatePattern = /^(\d{4}[-_]\d{2}[-_]\d{2}[\s_-]\d{2}[-_:]\d{2}[-_:]\d{2}|\d{8}[-_]\d{6})/;
     const scannerMatch = originalFilename.match(scannerDatePattern);
     const datePrefix = scannerMatch ? scannerMatch[1] : "";
     
-    return JSON.stringify(analyzeTextContent(text, filePath, datePrefix), null, 2);
+    return JSON.stringify(analyzeTextContent(ocrOutput, filePath, datePrefix), null, 2);
   } catch (error: any) {
     return `Error analyzing image: ${error.message}`;
   }
@@ -1472,7 +1464,7 @@ async function main() {
   try {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("MCP Document Intelligence Server v4.0.1 running - All features enabled");
+    console.error("MCP Document Intelligence Server v4.2.0 running - All features enabled");
   } catch (error: any) {
     console.error("Fatal error starting server:", error.message);
     console.error(error.stack);
