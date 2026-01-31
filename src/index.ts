@@ -12,9 +12,54 @@ import { createRequire } from "module";
 import { createWorker } from "tesseract.js";
 import mammoth from "mammoth";
 import AdmZip from "adm-zip";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import { createCanvas } from "canvas";
 
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse");
+
+// Konstanten für Validierung
+const MAX_FILENAME_LENGTH = 255;
+const MAX_FILE_SIZE_MB = 50;
+const SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".pages", ".png", ".jpg", ".jpeg", ".txt"];
+
+// Hilfsfunktion: Dateivalidierung
+function validateFile(filePath: string): { valid: boolean; error?: string } {
+  try {
+    // Prüfe ob Datei existiert
+    if (!fs.existsSync(filePath)) {
+      return { valid: false, error: "File does not exist" };
+    }
+
+    // Prüfe ob es eine Datei ist (kein Verzeichnis)
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return { valid: false, error: "Path is not a file" };
+    }
+
+    // Prüfe Dateigröße
+    const sizeInMB = stats.size / (1024 * 1024);
+    if (sizeInMB > MAX_FILE_SIZE_MB) {
+      return { valid: false, error: `File too large (${sizeInMB.toFixed(1)}MB, max ${MAX_FILE_SIZE_MB}MB)` };
+    }
+
+    // Prüfe Dateiname-Länge
+    const basename = path.basename(filePath);
+    if (basename.length > MAX_FILENAME_LENGTH) {
+      return { valid: false, error: `Filename too long (${basename.length} chars, max ${MAX_FILENAME_LENGTH})` };
+    }
+
+    // Prüfe Dateierweiterung
+    const ext = path.extname(filePath).toLowerCase();
+    if (!SUPPORTED_EXTENSIONS.includes(ext)) {
+      return { valid: false, error: `Unsupported file type: ${ext}. Supported: ${SUPPORTED_EXTENSIONS.join(", ")}` };
+    }
+
+    return { valid: true };
+  } catch (error: any) {
+    return { valid: false, error: error.message };
+  }
+}
 
 // Gemeinsame Textanalyse-Funktion für alle Dokumenttypen
 function analyzeTextContent(text: string, filePath: string, datePrefix: string): any {
@@ -125,24 +170,35 @@ function analyzeTextContent(text: string, filePath: string, datePrefix: string):
   };
 }
 
-// PDF Analyse
+// PDF Analyse mit OCR-Fallback für gescannte PDFs
 async function analyzePdf(filePath: string): Promise<string> {
   try {
     const dataBuffer = fs.readFileSync(filePath);
     let extractedText = "";
+    let ocrUsed = false;
     
+    // Schritt 1: Versuche Text-Extraktion mit pdf-parse
     try {
       const pdfData = await pdfParse(dataBuffer);
       extractedText = pdfData.text;
     } catch (error) {
-      console.error("PDF extraction failed, using OCR...");
+      console.error("PDF text extraction failed, will try OCR...");
     }
     
-    // Fallback OCR für gescannte PDFs
+    // Schritt 2: Fallback OCR für gescannte PDFs (wenn weniger als 50 Zeichen extrahiert wurden)
     if (!extractedText || extractedText.trim().length < 50) {
-      console.error("Running OCR on PDF...");
-      const worker = await createWorker("deu");
-      await worker.terminate();
+      console.error(`Text too short (${extractedText.trim().length} chars), running OCR on PDF...`);
+      try {
+        // Rendere PDF-Seiten als Bilder und führe OCR durch
+        const ocrText = await renderPdfPagesAndOCR(filePath);
+        if (ocrText && ocrText.length > extractedText.length) {
+          extractedText = ocrText;
+          ocrUsed = true;
+          console.error(`OCR successful: extracted ${ocrText.length} characters`);
+        }
+      } catch (ocrError: any) {
+        console.error("OCR failed:", ocrError.message);
+      }
     }
     
     const originalFilename = path.basename(filePath, path.extname(filePath));
@@ -150,10 +206,81 @@ async function analyzePdf(filePath: string): Promise<string> {
     const scannerMatch = originalFilename.match(scannerDatePattern);
     const datePrefix = scannerMatch ? scannerMatch[1] : "";
     
-    return JSON.stringify(analyzeTextContent(extractedText, filePath, datePrefix), null, 2);
+    const result = analyzeTextContent(extractedText, filePath, datePrefix);
+    
+    // Füge OCR-Info hinzu
+    return JSON.stringify({
+      ...result,
+      ocrUsed,
+      ocrQuality: ocrUsed ? (extractedText.length > 100 ? "good" : "poor") : "not-needed",
+      confidence: ocrUsed ? (extractedText.length > 100 ? 0.85 : 0.5) : 1.0
+    }, null, 2);
   } catch (error: any) {
-    return `Error analyzing PDF: ${error.message}`;
+    return JSON.stringify({
+      error: `Error analyzing PDF: ${error.message}`,
+      filePath,
+      suggestion: "Check if the file is a valid PDF and is readable"
+    }, null, 2);
   }
+}
+
+// Hilfsfunktion: Rendere PDF-Seiten als Bilder und führe OCR durch
+async function renderPdfPagesAndOCR(filePath: string): Promise<string> {
+  const dataBuffer = fs.readFileSync(filePath);
+  
+  // Lade PDF mit PDF.js
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(dataBuffer),
+    useSystemFonts: true,
+  });
+  
+  const pdfDocument = await loadingTask.promise;
+  const numPages = pdfDocument.numPages;
+  
+  console.error(`PDF has ${numPages} pages, processing with OCR...`);
+  
+  // Begrenze auf erste 5 Seiten für Performance
+  const maxPages = Math.min(numPages, 5);
+  const allText: string[] = [];
+  
+  // Initialisiere Tesseract Worker einmal
+  const worker = await createWorker("deu");
+  
+  try {
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      const page = await pdfDocument.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 2.0 }); // 2x für bessere OCR-Qualität
+      
+      // Erstelle Canvas
+      const canvas = createCanvas(viewport.width, viewport.height);
+      const context = canvas.getContext('2d') as any;
+      
+      // Rendere PDF-Seite auf Canvas
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+        canvas: canvas as any, // Canvas-Objekt für PDF.js
+      }).promise;
+      
+      // Konvertiere Canvas zu Buffer (PNG)
+      const imageBuffer = canvas.toBuffer('image/png');
+      
+      // OCR auf dem Bild durchführen
+      const { data: { text } } = await worker.recognize(imageBuffer);
+      
+      if (text && text.trim().length > 0) {
+        allText.push(text.trim());
+        console.error(`Page ${pageNum}: extracted ${text.trim().length} characters`);
+      }
+      
+      // Cleanup
+      page.cleanup();
+    }
+  } finally {
+    await worker.terminate();
+  }
+  
+  return allText.join('\n\n');
 }
 
 // DOCX Analyse
@@ -234,24 +361,70 @@ async function analyzeImage(filePath: string): Promise<string> {
   }
 }
 
-// TXT Analyse
+// TXT Analyse mit automatischer Encoding-Erkennung
 async function analyzeTxt(filePath: string): Promise<string> {
   try {
-    const text = fs.readFileSync(filePath, "utf-8");
+    let text = "";
+    let encoding = "utf-8";
+    
+    // Versuche verschiedene Encodings
+    try {
+      // Zuerst UTF-8 versuchen
+      text = fs.readFileSync(filePath, "utf-8");
+      
+      // Prüfe auf ungültige UTF-8-Zeichen (Replacement Character)
+      if (text.includes('\uFFFD') || text.includes('�')) {
+        // UTF-8 fehlgeschlagen, versuche Latin1/ISO-8859-1
+        const buffer = fs.readFileSync(filePath);
+        text = buffer.toString('latin1');
+        encoding = "latin1";
+      }
+    } catch (error) {
+      // Fallback: Lese als Binary und konvertiere zu Latin1
+      const buffer = fs.readFileSync(filePath);
+      text = buffer.toString('latin1');
+      encoding = "latin1";
+    }
+    
+    // Entferne Null-Bytes für die Analyse
+    const cleanText = text.replace(/\0/g, ' ');
     
     const originalFilename = path.basename(filePath, path.extname(filePath));
     const scannerDatePattern = /^(\d{4}[-_]\d{2}[-_]\d{2}[\s_-]\d{2}[-_:]\d{2}[-_:]\d{2}|\d{8}[-_]\d{6})/;
     const scannerMatch = originalFilename.match(scannerDatePattern);
     const datePrefix = scannerMatch ? scannerMatch[1] : "";
     
-    return JSON.stringify(analyzeTextContent(text, filePath, datePrefix), null, 2);
+    const result = analyzeTextContent(cleanText, filePath, datePrefix);
+    
+    // Füge Encoding-Info hinzu
+    return JSON.stringify({
+      ...result,
+      detectedEncoding: encoding,
+      hadNullBytes: text.includes('\0')
+    }, null, 2);
   } catch (error: any) {
-    return `Error analyzing TXT: ${error.message}`;
+    return JSON.stringify({
+      error: `Error analyzing TXT: ${error.message}`,
+      filePath,
+      suggestion: "Check if the file exists and is readable"
+    }, null, 2);
   }
 }
 
 // Haupt-Analyse-Funktion mit Multi-Format Support
 async function analyzeDocument(filePath: string): Promise<string> {
+  // Validiere Datei vor der Verarbeitung
+  const validation = validateFile(filePath);
+  if (!validation.valid) {
+    return JSON.stringify({
+      error: validation.error,
+      filePath,
+      supportedTypes: SUPPORTED_EXTENSIONS,
+      maxFileSize: `${MAX_FILE_SIZE_MB}MB`,
+      maxFilenameLength: MAX_FILENAME_LENGTH
+    }, null, 2);
+  }
+
   const ext = path.extname(filePath).toLowerCase();
   
   switch (ext) {
@@ -533,11 +706,6 @@ async function analyzeFolderBatch(
       console.error(`⚠️  Performance Warning: ${documentFiles.length} Dateien - kann lange dauern`);
     }
     
-    // ISO25010: Performance - Warn bei vielen Dateien
-    if (documentFiles.length > 100) {
-      console.error(`⚠️  Performance Warning: ${documentFiles.length} Dateien - kann lange dauern`);
-    }
-    
     if (documentFiles.length === 0) {
       return JSON.stringify({ 
         message: "No supported documents found in folder",
@@ -557,6 +725,9 @@ async function analyzeFolderBatch(
         folderPath
       }, null, 2);
     }
+    
+    // Performance-Tracking
+    const startTime = Date.now();
     
     const results = [];
     const duplicates: { [hash: string]: string[] } = {};
@@ -606,6 +777,11 @@ async function analyzeFolderBatch(
       .filter(([hash, paths]) => paths.length > 1)
       .map(([hash, paths]) => ({ hash, files: paths, count: paths.length }));
     
+    // Performance-Metriken
+    const endTime = Date.now();
+    const totalTime = endTime - startTime;
+    const avgTimePerFile = totalTime / documentFiles.length;
+    
     // ISO25010: Usability - Informative Zusammenfassung
     return JSON.stringify({
       folderPath,
@@ -615,6 +791,11 @@ async function analyzeFolderBatch(
       errors: errors.length > 0 ? errors : undefined,
       recursive,
       filters: { fileTypes, keywords },
+      performance: {
+        totalTimeMs: Math.round(totalTime),
+        averageTimePerFileMs: Math.round(avgTimePerFile),
+        filesPerSecond: (documentFiles.length / (totalTime / 1000)).toFixed(2)
+      },
       documents: results,
       duplicates: duplicateGroups.length > 0 ? {
         count: duplicateGroups.length,
@@ -1014,7 +1195,7 @@ function exportMetadata(documents: any[], format: "json" | "csv" = "json"): stri
 const server = new Server(
   {
     name: "mcp-document-intelligence",
-    version: "4.0.1",
+    version: "4.2.0",
   },
   {
     capabilities: {

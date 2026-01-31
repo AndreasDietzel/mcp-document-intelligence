@@ -1,7 +1,7 @@
 {
   "name": "mcp-document-intelligence",
-  "version": "4.0.1",
-  "description": "MCP Server with PDF OCR and intelligent filename generation",
+  "version": "4.2.0",
+  "description": "MCP Server with full PDF OCR support (scanned & text PDFs), intelligent filename generation, and comprehensive quality assurance",
   "type": "module",
   "main": "build/index.js",
   "bin": {
@@ -29,8 +29,10 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "@types/adm-zip": "^0.5.7",
     "adm-zip": "^0.5.16",
+    "canvas": "^3.2.1",
     "mammoth": "^1.11.0",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^5.4.530",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {

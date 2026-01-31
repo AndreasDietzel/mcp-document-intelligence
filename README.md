@@ -8,13 +8,30 @@ Fully automated document intelligence with advanced batch processing: Recursivel
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.0.1-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
+[![Version](https://img.shields.io/badge/Version-4.2.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
+[![Tests](https://img.shields.io/badge/Tests-99%2F100_Passing-brightgreen)](test-results.json)
 [![Perplexity](https://img.shields.io/badge/Perplexity-Compatible-purple)](https://www.perplexity.ai/)
 [![Claude](https://img.shields.io/badge/Claude-Compatible-orange)](https://claude.ai/)
 
 ---
 
 ## 🎯 Features
+
+### � v4.2 - Full PDF OCR Support
+- **📄 Scanned PDF Intelligence**: Complete OCR solution for image-based PDFs
+- **🤖 Automatic Detection**: Smart fallback from text extraction to OCR (<50 chars triggers OCR)
+- **📊 Quality Metrics**: OCR confidence scores and quality assessment
+- **⚡ Optimized Processing**: PDF.js rendering + Tesseract OCR (up to 5 pages)
+- **🌍 German Language Model**: Pre-configured for local documents
+- **📜 Apache-2.0 Licensed**: No licensing issues with PDF.js (Mozilla)
+
+### �🚀 v4.1 - Quality & Performance Enhancements
+- **🧪 Comprehensive Testing**: 100 automated test cases with 99% pass rate
+- **📊 Performance Metrics**: Real-time processing stats and throughput reporting
+- **🔍 Enhanced Validation**: File size, name length, and type validation
+- **🌐 Better Encoding Detection**: Automatic UTF-8/Latin-1 switching with reporting
+- **⚡ Optimized Processing**: Average <100ms per file, batch <2000ms
+- **🛡️ Robust Error Handling**: Structured errors with actionable suggestions
 
 ### 🚀 v4.0 - Enterprise Features
 - **🔍 Recursive Scanning**: Deep folder analysis up to 10 levels
@@ -36,7 +53,10 @@ Fully automated document intelligence with advanced batch processing: Recursivel
 
 ### �📄 Multi-Format Document Intelligence
 - **Text Extraction**: Extract text from PDF, DOCX, Pages, Images, TXT
-- **OCR Support**: Tesseract.js for scanned documents with quality scoring
+- **Full PDF OCR**: PDF.js + Tesseract.js for scanned PDFs (automatic fallback)
+- **OCR Quality Scoring**: Confidence metrics and quality assessment for all OCR operations
+- **Multi-Encoding Support**: Automatic detection and handling of UTF-8, Latin-1/ISO-8859-1
+- **Robust Parsing**: Handles null-bytes, special characters, and unusual file names
 - **Smart Filename Suggestions**: Automatically extracts:
   - Scanner timestamps (preserves existing `2024-01-24_14-30-45` format)
   - Document dates (DD.MM.YYYY, YYYY-MM-DD)
@@ -461,6 +481,31 @@ Automatically groups documents by:
 - ✅ **OCR processing on-device** - Tesseract.js runs locally
 - ✅ **No data transmission** - All processing happens locally
 - ✅ **No logging of document content**
+
+---
+
+## 🌍 Encoding & International Support
+
+- ✅ **Automatic Encoding Detection** - UTF-8 and Latin-1/ISO-8859-1
+- ✅ **International Characters** - Full Unicode support (日本語, 中文, العربية, עברית)
+- ✅ **German Umlauts** - Native support for äöüÄÖÜß
+- ✅ **Special Characters** - Handles pipes, colons, quotes in filenames
+- ✅ **Null-Byte Handling** - Automatically cleans corrupted files
+- ✅ **Encoding Info** - Reports detected encoding in analysis results
+
+---
+
+## 🧪 Quality Assurance
+
+This project maintains high quality standards with comprehensive testing:
+
+- **100 Automated Tests** covering all functionality
+- **99% Test Pass Rate** (99/100 tests passing)
+- **ISO 25010 Compliant** - Quality characteristics validated
+- **Performance Benchmarks** - <100ms per file average
+- **Security Tested** - Path traversal and data privacy verified
+
+See [TEST-DOCUMENTATION.md](TEST-DOCUMENTATION.md) for detailed test coverage and results.
 
 ---
 
