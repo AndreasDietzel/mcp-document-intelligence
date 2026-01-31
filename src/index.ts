@@ -696,8 +696,8 @@ async function analyzeFolderBatch(
     }
     
     // ISO25010: Performance - Warn bei vielen Dateien
-    if (documentFiles.length > 100) {
-      console.error(`⚠️  Performance Warning: ${documentFiles.length} Dateien - kann lange dauern`);
+    if (documentFiles.length > 200) {
+      console.error(`⚠️  Performance Warning: ${documentFiles.length} Dateien - kann 5-15 Minuten dauern`);
     }
     
     if (documentFiles.length === 0) {
@@ -710,8 +710,8 @@ async function analyzeFolderBatch(
       }, null, 2);
     }
     
-    // ISO25010: Reliability - Limit für Stabilität
-    const maxFiles = 500;
+    // ISO25010: Reliability - Limit für Stabilität (erhöht für große Archive)
+    const maxFiles = 2000;
     if (documentFiles.length > maxFiles) {
       return JSON.stringify({
         error: `Too many files (${documentFiles.length}). Maximum: ${maxFiles}`,
@@ -732,8 +732,8 @@ async function analyzeFolderBatch(
       try {
         // ISO25010: Usability - Progress bei vielen Dateien
         processedCount++;
-        if (documentFiles.length > 20 && processedCount % 10 === 0) {
-          console.error(`📊 Progress: ${processedCount}/${documentFiles.length} Dateien`);
+        if (documentFiles.length > 20 && processedCount % 25 === 0) {
+          console.error(`📊 Progress: ${processedCount}/${documentFiles.length} Dateien (${Math.round(processedCount/documentFiles.length*100)}%)`);
         }
         
         // Duplikat-Erkennung (#4)
