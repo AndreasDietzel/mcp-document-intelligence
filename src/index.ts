@@ -695,29 +695,16 @@ async function analyzeFolderBatch(
         .map(file => path.join(folderPath, file));
     }
     
-    // ISO25010: Performance - Warn bei vielen Dateien
-    if (documentFiles.length > 200) {
-      console.error(`⚠️  Performance Warning: ${documentFiles.length} Dateien - kann 5-15 Minuten dauern`);
+    // ISO25010: Performance - Warn bei sehr vielen Dateien
+    if (documentFiles.length > 500) {
+      console.error(`⚠️  Performance Warning: ${documentFiles.length} Dateien - kann 15-45 Minuten dauern`);
     }
     
-    if (documentFiles.length === 0) {
-      return JSON.stringify({ 
-        message: "No supported documents found in folder",
-        folderPath,
-        recursive,
-        filters: { fileTypes, keywords },
-        supportedExtensions 
-      }, null, 2);
-    }
-    
-    // ISO25010: Reliability - Limit für Stabilität (erhöht für große Archive)
-    const maxFiles = 2000;
-    if (documentFiles.length > maxFiles) {
-      return JSON.stringify({
-        error: `Too many files (${documentFiles.length}). Maximum: ${maxFiles}`,
-        suggestion: "Use filters (fileTypes, keywords) or process subfolders separately",
-        folderPath
-      }, null, 2);
+    // ISO25010: Reliability - Soft limit mit Warnung (kein Hard-Limit mehr)
+    const softLimit = 5000;
+    if (documentFiles.length > softLimit) {
+      console.error(`⚠️  ACHTUNG: ${documentFiles.length} Dateien überschreiten empfohlenes Limit von ${softLimit}`);
+      console.error(`⚠️  Verarbeitung kann >1 Stunde dauern. Fortfahren...`);
     }
     
     // Performance-Tracking
