@@ -11,8 +11,6 @@ import * as path from "path";
 import { createRequire } from "module";
 import mammoth from "mammoth";
 import AdmZip from "adm-zip";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import { createCanvas } from "canvas";
 
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse");
@@ -1187,7 +1185,7 @@ function exportMetadata(documents: any[], format: "json" | "csv" = "json"): stri
 const server = new Server(
   {
     name: "mcp-document-intelligence",
-    version: "4.2.0",
+    version: "4.2.1",
   },
   {
     capabilities: {
@@ -1464,7 +1462,7 @@ async function main() {
   try {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("MCP Document Intelligence Server v4.2.0 running - All features enabled");
+    console.error("MCP Document Intelligence Server v4.2.1 running - All features enabled");
   } catch (error: any) {
     console.error("Fatal error starting server:", error.message);
     console.error(error.stack);

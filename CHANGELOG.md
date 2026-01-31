@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.1] - 2026-01-31
+
+### Changed
+- **🔧 Simplified OCR Stack**: Replaced Tesseract.js + PDF.js + Canvas with native CLI tools
+  - Now uses `pdftoppm` (poppler) for PDF to image conversion
+  - Native `tesseract` CLI for OCR (much more reliable in MCP context)
+  - Removed 57 npm packages, reducing complexity and dependencies
+- **📦 Cleaner Dependencies**: Removed tesseract.js, pdfjs-dist, and canvas packages
+- **⚡ Better Performance**: Native tools are faster and more memory-efficient
+- **🛠️ Easier Setup**: System dependencies (tesseract, poppler) via Homebrew
+
+### Fixed
+- OCR now works reliably for scanned PDFs (fixed "Image or Canvas expected" error)
+- PDF rendering issues in MCP server context resolved
+
+### Requirements
+- `brew install tesseract tesseract-lang` - OCR engine with language packs
+- `brew install poppler` - PDF rendering tools (pdftoppm)
+
 ## [4.2.0] - 2026-01-31
 
 ### Added
