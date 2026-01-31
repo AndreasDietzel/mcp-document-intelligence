@@ -226,45 +226,49 @@ async function renderPdfPagesAndOCR(filePath: string): Promise<string> {
   const { execSync } = require('child_process');
   
   try {
-    // Verwende pdftoppm (Teil von poppler-utils) um PDF in Bilder zu konvertieren
-    // Falls nicht installiert: brew install poppler
-    const tempDir = `/tmp/pdf-ocr-${Date.now()}`;
+    // Verwende $HOME/.tmp statt /tmp wegen Tesseract Pfad-Problemen
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '/tmp';
+    const tempDir = path.join(homeDir, `.pdf-ocr-${Date.now()}`);
     fs.mkdirSync(tempDir, { recursive: true });
     
-    // Konvertiere PDF-Seiten zu PNG (first 5 pages, 300 DPI for better OCR)
-    execSync(`pdftoppm -png -r 300 -f 1 -l 5 "${filePath}" "${tempDir}/page"`, {
-      stdio: 'pipe'
-    });
-    
-    // Finde alle generierten PNG-Dateien
-    const pngFiles = fs.readdirSync(tempDir).filter(f => f.endsWith('.png')).sort();
-    
-    console.error(`PDF converted to ${pngFiles.length} PNG files, running OCR...`);
-    
-    const allText: string[] = [];
-    
-    for (const pngFile of pngFiles) {
-      const pngPath = path.join(tempDir, pngFile);
-      try {
-        // OCR mit nativem Tesseract durchführen
-        const ocrOutput = execSync(`tesseract "${pngPath}" stdout -l deu --psm 6`, { 
-          encoding: 'utf-8',
-          maxBuffer: 10 * 1024 * 1024 // 10MB Buffer
-        });
-        
-        if (ocrOutput && ocrOutput.trim().length > 0) {
-          allText.push(ocrOutput.trim());
-          console.error(`${pngFile}: extracted ${ocrOutput.trim().length} characters`);
+    try {
+      // Konvertiere PDF-Seiten zu PNG (first 5 pages, 300 DPI for better OCR)
+      execSync(`pdftoppm -png -r 300 -f 1 -l 5 "${filePath}" "${tempDir}/page"`, {
+        stdio: 'pipe'
+      });
+      
+      // Finde alle generierten PNG-Dateien
+      const pngFiles = fs.readdirSync(tempDir).filter(f => f.endsWith('.png')).sort();
+      
+      console.error(`PDF converted to ${pngFiles.length} PNG files, running OCR...`);
+      
+      const allText: string[] = [];
+      
+      for (const pngFile of pngFiles) {
+        const pngPath = path.join(tempDir, pngFile);
+        try {
+          // OCR mit nativem Tesseract durchführen
+          const ocrOutput = execSync(`tesseract "${pngPath}" stdout -l deu --psm 6`, { 
+            encoding: 'utf-8',
+            maxBuffer: 10 * 1024 * 1024 // 10MB Buffer
+          });
+          
+          if (ocrOutput && ocrOutput.trim().length > 0) {
+            allText.push(ocrOutput.trim());
+            console.error(`${pngFile}: extracted ${ocrOutput.trim().length} characters`);
+          }
+        } catch (ocrError: any) {
+          console.error(`OCR failed for ${pngFile}:`, ocrError.message);
         }
-      } catch (ocrError: any) {
-        console.error(`OCR failed for ${pngFile}:`, ocrError.message);
+      }
+      
+      return allText.join('\n\n');
+    } finally {
+      // Cleanup - immer ausführen
+      if (fs.existsSync(tempDir)) {
+        execSync(`rm -rf "${tempDir}"`, { stdio: 'pipe' });
       }
     }
-    
-    // Cleanup
-    execSync(`rm -rf "${tempDir}"`, { stdio: 'pipe' });
-    
-    return allText.join('\n\n');
   } catch (error: any) {
     throw new Error(`PDF to image conversion failed: ${error.message}`);
   }
