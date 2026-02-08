@@ -24,7 +24,31 @@ Der MCP Server muss in Claude Desktop konfiguriert sein.
 
 ---
 
+## 📋 TESTFALL 1A: Einzelne Datei analysieren (Perplexity-freundlich)
+
+✅ **Dieser Testfall funktioniert zuverlässig in Perplexity!**
+
+```
+Analysiere eine einzelne Testdatei aus dem Projekt.
+
+Nutze das MCP Tool "analyze_document" mit:
+{
+  "filePath": "/Users/andreasdietzel/Projects/mcp-document-intelligence/test-data/Rechnung_für_Müller_Größe_XL.txt"
+}
+
+Zeige mir:
+- Erkanntes Datum
+- Extrahierte Referenznummern
+- Gefundene Keywords
+- Vorgeschlagenen Dateinamen
+- Kategorisierungs-Vorschlag
+```
+
+---
+
 ## 📋 TESTFALL 1: Downloads analysieren (Copy & Paste)
+
+⚠️ **WICHTIG für Perplexity:** Dieser Testfall funktioniert besser mit Claude Desktop!
 
 ⚠️ **Falls "Tool nicht gefunden"-Fehler:** Siehe Troubleshooting unten!
 
@@ -36,7 +60,7 @@ Nutze das MCP Tool "process_downloads" mit exakt diesen Parametern:
   "downloadsPath": "/Users/andreasdietzel/Downloads",
   "archiveBasePath": "/Users/andreasdietzel/Library/Mobile Documents/com~apple~CloudDocs/DateiArchiv/Archiv",
   "autoMove": false,
-  "maxFiles": 30
+  "maxFiles": 10
 }
 
 Zeige mir das Ergebnis als Tabelle mit:
@@ -50,6 +74,8 @@ Zusammenfassung:
 - Anzahl gefundener Dateien
 - Anzahl analysierbarer Dateien  
 - Verteilung nach Kategorien
+
+Falls ein Fehler auftritt, zeige mir die komplette Fehlermeldung mit troubleshooting-Details.
 ```
 
 ---
@@ -173,18 +199,29 @@ Liste alle Tools auf, die mit "document" oder "archive" zu tun haben.
 **Ursache:** Pfad-Berechtigung in Perplexity (bei Claude nicht relevant).
 
 **Lösung für Perplexity:**
-1. Statt `/Users/andreasdietzel/Downloads` nutze:
-   ```
-   "downloadsPath": "~/Downloads"
-   ```
+1. **Testfall 1A: Analysiere einzelne Datei** (funktioniert besser in Perplexity):
+```
+Nutze das MCP Tool "analyze_document" mit einer einzelnen Datei:
+{
+  "filePath": "/Users/andreasdietzel/Downloads/DATEINAME.pdf"
+}
 
-2. Falls weiterhin nicht erlaubt: Testdatei kopieren:
-   ```bash
-   cp ~/Downloads/test.pdf ~/Projects/mcp-document-intelligence/test-data/
-   ```
-   Dann Tool `analyze_document` mit diesem Pfad testen.
+Zeige mir die Analyse-Ergebnisse.
+```
 
-**Alternative:** Nutze Claude Desktop statt Perplexity (keine Pfad-Einschränkungen).
+2. **Alternative: Testdaten-Ordner nutzen** (ist im Projekt freigegeben):
+```
+Nutze "analyze_folder" mit:
+{
+  "folderPath": "/Users/andreasdietzel/Projects/mcp-document-intelligence/test-data"
+}
+
+Analysiere alle Testdateien und zeige mir die Ergebnisse.
+```
+
+3. **Beste Lösung: Claude Desktop nutzen** (keine Pfad-Einschränkungen)
+   - Siehe Schnellstart oben für Claude Desktop Config
+   - Claude Desktop hat vollen Dateisystem-Zugriff
 
 ### ❌ "pdftotext not found" 
 

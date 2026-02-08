@@ -1381,16 +1381,65 @@ async function processDownloads(
 ): Promise<string> {
   try {
     console.error(`\n📥 DOWNLOADS VERARBEITEN: ${downloadsPath}`);
+    console.error(`📂 Archiv-Basis: ${archiveBasePath}`);
+    console.error(`🔄 Auto-Move: ${autoMove}`);
+    console.error(`🔢 Max-Dateien: ${maxFiles}`);
     
-    // Prüfe ob Downloads existiert
-    if (!fs.existsSync(downloadsPath)) {
-      return JSON.stringify({ error: `Downloads-Ordner nicht gefunden: ${downloadsPath}` });
+    // DIAGNOSE: Prüfe Berechtigungen
+    try {
+      const normalizedDownloads = normalizeUnicode(downloadsPath);
+      console.error(`🔍 Normalisierter Pfad: ${normalizedDownloads}`);
+      
+      // Prüfe ob Downloads existiert
+      if (!fs.existsSync(normalizedDownloads)) {
+        return JSON.stringify({ 
+          error: `Downloads-Ordner nicht gefunden: ${normalizedDownloads}`,
+          troubleshooting: {
+            userPath: downloadsPath,
+            normalizedPath: normalizedDownloads,
+            hint: "Versuche absoluten Pfad: /Users/USERNAME/Downloads"
+          }
+        }, null, 2);
+      }
+      
+      // Prüfe Leserechte
+      fs.accessSync(normalizedDownloads, fs.constants.R_OK);
+      console.error(`✅ Leserechte OK für: ${normalizedDownloads}`);
+      
+    } catch (accessError: any) {
+      return JSON.stringify({ 
+        error: `Kein Zugriff auf Downloads-Ordner: ${accessError.message}`,
+        troubleshooting: {
+          errorCode: accessError.code,
+          path: downloadsPath,
+          hint: "Perplexity: Pfad außerhalb erlaubter Bereiche? Nutze Claude Desktop oder gib vollständigen Pfad an."
+        }
+      }, null, 2);
     }
     
     // Sammle Dateien aus Downloads (nur Root, nicht rekursiv)
-    const allFiles = fs.readdirSync(downloadsPath)
-      .map(f => path.join(downloadsPath, f))
-      .filter(f => fs.statSync(f).isFile());
+    let allFiles: string[];
+    try {
+      allFiles = fs.readdirSync(downloadsPath)
+        .map(f => path.join(downloadsPath, f))
+        .filter(f => {
+          try {
+            return fs.statSync(f).isFile();
+          } catch {
+            return false;
+          }
+        });
+      console.error(`📋 Alle Dateien gefunden: ${allFiles.length}`);
+    } catch (readError: any) {
+      return JSON.stringify({ 
+        error: `Fehler beim Lesen des Ordners: ${readError.message}`,
+        troubleshooting: {
+          errorCode: readError.code,
+          path: downloadsPath,
+          filesystemError: true
+        }
+      }, null, 2);
+    }
     
     const documentFiles = allFiles
       .filter(file => {
@@ -1399,11 +1448,20 @@ async function processDownloads(
       })
       .slice(0, maxFiles);
     
-    console.error(`📄 Gefunden: ${documentFiles.length} Dokumente (max: ${maxFiles})`);
+    console.error(`📄 Dokumente gefiltert: ${documentFiles.length} (max: ${maxFiles})`);
+    
+    if (documentFiles.length === 0) {
+      return JSON.stringify({ 
+        scanned: 0,
+        message: "Keine unterstützten Dokumente gefunden (.pdf, .docx, .pages, .png, .jpg, .jpeg, .txt)",
+        totalFiles: allFiles.length,
+        hint: "Ordner enthält Dateien, aber keine analysierbaren Dokumente"
+      }, null, 2);
+    }
     
     const results = {
       scanned: documentFiles.length,
-      suggestions: [] as Array<{from: string, to: string, year: number, category: string}>,
+      suggestions: [] as Array<{from: string, to: string, year: number, category: string, filename: string}>,
       filed: [] as Array<{from: string, to: string}>,
       errors: [] as Array<{file: string, error: string}>
     };
@@ -1436,7 +1494,7 @@ async function processDownloads(
         
         // Baue Zielpfad
         const targetDir = path.join(archiveBasePath, decade, year.toString(), category);
-        const newFilename = analysis.suggestedFilename || `${dateStr}_${filename}`;
+        const newFilename = sanitizeFilename(analysis.suggestedFilename || `${dateStr}_${filename}`);
         const targetPath = path.join(targetDir, newFilename);
         
         // Vorschlag
@@ -1444,7 +1502,8 @@ async function processDownloads(
           from: filePath,
           to: targetPath,
           year,
-          category
+          category,
+          filename: newFilename
         });
         
         // Automatisch verschieben?
@@ -1452,9 +1511,11 @@ async function processDownloads(
           fs.mkdirSync(targetDir, { recursive: true });
           fs.renameSync(filePath, targetPath);
           results.filed.push({from: filePath, to: targetPath});
+          console.error(`✅ Verschoben: ${filename} → ${category}/${newFilename}`);
         }
         
       } catch (error: any) {
+        console.error(`❌ Fehler bei ${filename}: ${error.message}`);
         results.errors.push({file: filename, error: error.message});
       }
     }
@@ -1467,11 +1528,21 @@ async function processDownloads(
         : `${results.suggestions.length} Vorschläge erstellt - setze autoMove=true zum Verschieben`
     };
     
-    console.error(`✅ Downloads verarbeitet: ${results.suggestions.length} Vorschläge`);
+    console.error(`✅ Downloads verarbeitet: ${results.suggestions.length} Vorschläge, ${results.errors.length} Fehler`);
     return JSON.stringify(summary, null, 2);
     
   } catch (error: any) {
-    return JSON.stringify({ error: `Downloads-Verarbeitung fehlgeschlagen: ${error.message}` }, null, 2);
+    console.error(`❌ FATALER FEHLER: ${error.message}`);
+    console.error(error.stack);
+    return JSON.stringify({ 
+      error: `Downloads-Verarbeitung fehlgeschlagen: ${error.message}`,
+      stack: error.stack,
+      troubleshooting: {
+        downloadsPath,
+        archiveBasePath,
+        hint: "Stelle sicher, dass beide Pfade existieren und lesbar sind"
+      }
+    }, null, 2);
   }
 }
 
