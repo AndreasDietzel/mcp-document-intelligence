@@ -13,6 +13,31 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
+/**
+ * Normalizes Unicode strings to NFC (Canonical Composition)
+ * macOS uses NFD, but we want consistent NFC for file operations
+ */
+function normalizeUnicode(str: string): string {
+  return str.normalize('NFC');
+}
+
+/**
+ * Safe filename: removes/replaces problematic characters, normalizes Unicode
+ */
+function sanitizeFilename(filename: string): string {
+  // Normalize Unicode (NFD -> NFC)
+  let safe = normalizeUnicode(filename);
+  
+  // Replace problematic characters but keep German umlauts
+  safe = safe.replace(/[<>:"|?*\x00-\x1F]/g, '_');
+  safe = safe.replace(/[\\]/g, '-');
+  
+  // Trim and remove multiple underscores
+  safe = safe.trim().replace(/_+/g, '_').replace(/^_|_$/g, '');
+  
+  return safe;
+}
+
 interface CleanupResult {
   movedSubdirs: number;
   movedOldCategories: number;
@@ -367,12 +392,24 @@ export function moveLooseFiles(archiveBase: string): string {
 
 /**
  * Extracts text from PDF using pdftotext (requires poppler installed)
+ * Handles UTF-8 encoding and files with umlauts
  */
 async function extractTextFromPDF(filePath: string): Promise<string> {
   try {
-    const { stdout } = await execAsync(`pdftotext -l 3 "${filePath}" - 2>/dev/null | head -c 5000`);
+    // Normalize path for macOS
+    const normalizedPath = normalizeUnicode(filePath);
+    
+    // Use single quotes for shell, escape single quotes in filename
+    const escapedPath = normalizedPath.replace(/'/g, "'\\''" );
+    
+    // Force UTF-8 encoding
+    const { stdout } = await execAsync(
+      `pdftotext -enc UTF-8 -l 3 '${escapedPath}' - 2>/dev/null | head -c 5000`,
+      { encoding: 'utf8' }
+    );
     return stdout.trim();
-  } catch (error) {
+  } catch (error: any) {
+    console.error(`PDF extraction failed for ${path.basename(filePath)}: ${error.message}`);
     return "";
   }
 }
@@ -470,7 +507,10 @@ export async function intelligentRename(archiveBase: string, dryRun: boolean = t
         const dateMatch = item.match(/^(\d{4}-\d{2}-\d{2})/);
         const date = dateMatch ? dateMatch[1] : item.substring(0, 10);
         const entityPart = detectedEntity ? `_${detectedEntity.charAt(0).toUpperCase() + detectedEntity.slice(1)}` : "";
-        const newName = `${date}_${docType.charAt(0).toUpperCase() + docType.slice(1)}${entityPart}.pdf`;
+        let newName = `${date}_${docType.charAt(0).toUpperCase() + docType.slice(1)}${entityPart}.pdf`;
+        
+        // Sanitize filename (handle umlauts correctly)
+        newName = sanitizeFilename(newName);
         
         if (!dryRun) {
           const categoryPath = path.join(yearPath, category);
@@ -478,9 +518,24 @@ export async function intelligentRename(archiveBase: string, dryRun: boolean = t
             fs.mkdirSync(categoryPath, { recursive: true });
           }
           
-          const target = path.join(categoryPath, newName);
-          if (!fs.existsSync(target)) {
-            fs.renameSync(itemPath, target);
+          let target = path.join(categoryPath, newName);
+          
+          // Handle duplicates
+          if (fs.existsSync(target) && target !== itemPath) {
+            let counter = 1;
+            const ext = path.extname(newName);
+            const base = path.basename(newName, ext);
+            while (fs.existsSync(target) && target !== itemPath) {
+              newName = sanitizeFilename(`${base}_${counter}${ext}`);
+              target = path.join(categoryPath, newName);
+              counter++;
+            }
+          }
+          
+          if (!fs.existsSync(target) || target === itemPath) {
+            if (target !== itemPath) {
+              fs.renameSync(itemPath, target);
+            }
             totalMoved++;
           } else {
             totalSkipped++;

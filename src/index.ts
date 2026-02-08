@@ -46,6 +46,31 @@ const MAX_FILENAME_LENGTH = 255;
 const MAX_FILE_SIZE_MB = 50;
 const SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".pages", ".png", ".jpg", ".jpeg", ".txt"];
 
+/**
+ * Normalizes Unicode strings to NFC (Canonical Composition)
+ * macOS uses NFD, but we want consistent NFC for file operations
+ */
+function normalizeUnicode(str: string): string {
+  return str.normalize('NFC');
+}
+
+/**
+ * Safe filename: removes/replaces problematic characters, normalizes Unicode
+ */
+function sanitizeFilename(filename: string): string {
+  // Normalize Unicode (NFD -> NFC)
+  let safe = normalizeUnicode(filename);
+  
+  // Replace problematic characters but keep German umlauts
+  safe = safe.replace(/[<>:"|?*\x00-\x1F]/g, '_');
+  safe = safe.replace(/[\\]/g, '-');
+  
+  // Trim and remove multiple underscores
+  safe = safe.trim().replace(/_+/g, '_').replace(/^_|_$/g, '');
+  
+  return safe;
+}
+
 // Hilfsfunktion: Dateivalidierung
 function validateFile(filePath: string): { valid: boolean; error?: string } {
   try {
@@ -174,9 +199,12 @@ function analyzeTextContent(text: string, filePath: string, datePrefix: string):
   // Wenn keine neuen Informationen gefunden wurden, behalte Original-Namen
   const hasNewInfo = references.length > 0 || keywords.length > 0 || (!datePrefix && documentDate);
   const originalName = path.basename(filePath);
-  const suggestedFilename = hasNewInfo && parts.length > 0 
+  let suggestedFilename = hasNewInfo && parts.length > 0 
     ? parts.join("_") + fileExtension
     : originalName;
+  
+  // Sanitize filename (handle umlauts correctly)
+  suggestedFilename = sanitizeFilename(suggestedFilename);
   
   return {
     originalFilename: originalName,

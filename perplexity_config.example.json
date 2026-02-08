@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "document-intelligence": {
+      "command": "node",
+      "args": [
+        "/Users/andreasdietzel/Projects/mcp-document-intelligence/build/index.js"
+      ]
+    }
+  }
+}
