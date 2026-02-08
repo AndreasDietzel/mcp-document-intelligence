@@ -8,7 +8,7 @@ Fully automated document intelligence with advanced batch processing: Recursivel
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.4.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
+[![Version](https://img.shields.io/badge/Version-4.5.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
 [![Tests](https://img.shields.io/badge/Tests-99%2F100_Passing-brightgreen)](test-results.json)
 [![Performance](https://img.shields.io/badge/Performance-Memory_Optimized-brightgreen)](README.md)
 [![Perplexity](https://img.shields.io/badge/Perplexity-Compatible-purple)](https://www.perplexity.ai/)
@@ -18,7 +18,15 @@ Fully automated document intelligence with advanced batch processing: Recursivel
 
 ## 🎯 Features
 
-### ⚡ **NEW in v4.4 - Performance Optimizations**
+### ⚡ **NEW in v4.5 - Advanced Archive Management**
+- **🧹 cleanup_old_structure**: Removes old folder hierarchies, consolidates into standard categories
+- **📁 optimize_folder_structure**: Deletes empty folders, moves single-file categories to 99_Sonstiges
+- **🤖 intelligent_rename**: PDF content analysis for smart naming (extracts companies, document types)
+- **📋 move_loose_files**: Pattern-based categorization for loose files
+- **🎯 Production Ready**: Tested with 2,714 files, fully automated workflow
+- **📚 Complete Documentation**: [PRODUCTION-SETUP.md](PRODUCTION-SETUP.md) and [TESTFALL-PERPLEXITY.md](TESTFALL-PERPLEXITY.md)
+
+### ⚡ **v4.4 - Performance Optimizations**
 - **🎯 Memory-Efficient Processing**: Generator-based file scanning - no memory overflow
 - **📊 Batch Processing**: Processes 25 files per batch with automatic pauses
 - **🛡️ Safety Limits**: Configurable limits (500 files/year) prevent system crashes
