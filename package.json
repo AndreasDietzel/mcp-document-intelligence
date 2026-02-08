@@ -1,6 +1,6 @@
 {
   "name": "mcp-document-intelligence",
-  "version": "4.4.0",
+  "version": "4.5.0",
   "description": "MCP Server with memory-optimized processing, autonomous organization, PDF OCR support, Downloads integration, and batch processing with resume capability",
   "type": "module",
   "main": "build/index.js",

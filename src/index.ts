@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * MCP Document Intelligence Server v4.4.0
+ * MCP Document Intelligence Server v4.5.0
  * 
  * Performance Optimizations (v4.4.0):
  * - Generator-based directory scanning for memory efficiency
@@ -10,7 +10,13 @@
  * - Rate limiting for file operations
  * - Memory usage monitoring and tracking
  * 
- * See performance-utils.ts for implementation details
+ * Advanced Features (v4.5.0):
+ * - cleanup_old_structure: Removes old folder hierarchies
+ * - optimize_folder_structure: Deletes empty folders, consolidates single-file categories
+ * - intelligent_rename: PDF content analysis for smart naming
+ * - move_loose_files: Pattern-based file categorization
+ * 
+ * See performance-utils.ts and advanced-tools.ts for implementation details
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -25,6 +31,12 @@ import * as os from "os";
 import { createRequire } from "module";
 import mammoth from "mammoth";
 import AdmZip from "adm-zip";
+import {
+  cleanupOldStructure,
+  optimizeFolderStructure,
+  moveLooseFiles,
+  intelligentRename
+} from "./advanced-tools.js";
 
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse");
@@ -1798,6 +1810,67 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["folderPath", "targetArchivePath"]
         },
       },
+      {
+        name: "cleanup_old_structure",
+        description: "Bereinigt alte Ordnerstrukturen im Archiv. Verschiebt alte Unterordner (ADA, Informatik, Recht, etc.) nach 08_Bildung. Löst alte Kategorien (01_Studium, 02_Beruf, etc.) auf und konsolidiert in Standard-Kategorien.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            archiveBasePath: {
+              type: "string",
+              description: "Basis-Pfad des Archivs (z.B. .../DateiArchiv/Archiv)"
+            }
+          },
+          required: ["archiveBasePath"]
+        },
+      },
+      {
+        name: "optimize_folder_structure",
+        description: "Optimiert Ordnerstruktur: Löscht leere Ordner und verschiebt Einzeldateien aus Kategorien nach 99_Sonstiges. Behält nur Kategorien mit mindestens 2 Dateien.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            archiveBasePath: {
+              type: "string",
+              description: "Basis-Pfad des Archivs (z.B. .../DateiArchiv/Archiv)"
+            }
+          },
+          required: ["archiveBasePath"]
+        },
+      },
+      {
+        name: "move_loose_files",
+        description: "Kategorisiert lose Dateien basierend auf Dateinamen-Mustern. Verschiebt Studienunterlagen nach 08_Bildung, Rechnungen nach 01_Finanzen, etc.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            archiveBasePath: {
+              type: "string",
+              description: "Basis-Pfad des Archivs (z.B. .../DateiArchiv/Archiv)"
+            }
+          },
+          required: ["archiveBasePath"]
+        },
+      },
+      {
+        name: "intelligent_rename",
+        description: "Intelligente Umbenennung von PDFs basierend auf Dokumentinhalt. Analysiert Text mit pdftotext, erkennt Firmen (ING, Hallesche, etc.), Dokumenttypen (Rechnung, Vertrag) und kategorisiert automatisch. HINWEIS: Benötigt poppler-utils (pdftotext).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            archiveBasePath: {
+              type: "string",
+              description: "Basis-Pfad des Archivs (z.B. .../DateiArchiv/Archiv)"
+            },
+            dryRun: {
+              type: "boolean",
+              description: "Nur Vorschau ohne tatsächliche Änderungen (Standard: true)",
+              default: true
+            }
+          },
+          required: ["archiveBasePath"]
+        },
+      },
     ],
   };
 });
@@ -1953,6 +2026,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case "cleanup_old_structure": {
+        const archiveBasePath = args?.archiveBasePath as string;
+        if (!archiveBasePath) {
+          throw new Error("archiveBasePath is required");
+        }
+        const result = cleanupOldStructure(archiveBasePath);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "optimize_folder_structure": {
+        const archiveBasePath = args?.archiveBasePath as string;
+        if (!archiveBasePath) {
+          throw new Error("archiveBasePath is required");
+        }
+        const result = optimizeFolderStructure(archiveBasePath);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "move_loose_files": {
+        const archiveBasePath = args?.archiveBasePath as string;
+        if (!archiveBasePath) {
+          throw new Error("archiveBasePath is required");
+        }
+        const result = moveLooseFiles(archiveBasePath);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "intelligent_rename": {
+        const archiveBasePath = args?.archiveBasePath as string;
+        const dryRun = args?.dryRun !== undefined ? Boolean(args.dryRun) : true;
+        if (!archiveBasePath) {
+          throw new Error("archiveBasePath is required");
+        }
+        const result = await intelligentRename(archiveBasePath, dryRun);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -1968,7 +2086,7 @@ async function main() {
   try {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("MCP Document Intelligence Server v4.2.1 running - All features enabled");
+    console.error("MCP Document Intelligence Server v4.5.0 running - All features enabled");
   } catch (error: any) {
     console.error("Fatal error starting server:", error.message);
     console.error(error.stack);

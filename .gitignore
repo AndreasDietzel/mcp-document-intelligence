@@ -22,11 +22,16 @@ test-data/*.jpeg
 .backup_*.json
 
 # Python-Scripte mit persönlichen Pfaden
-process-*.py
-analyze-*.py
-check-status.py
-list-*.py
-full-status-check.py
+scripts/process-*.py
+scripts/analyze-*.py
+scripts/check-status.py
+scripts/list-*.py
+scripts/full-status-check.py
+scripts/cleanup-*.py
+scripts/optimize-*.py
+scripts/move-*.py
+scripts/intelligent-*.py
+scripts/show-*.py
 
 # Status-Dokumentation mit persönlichen Infos
 ARCHIV-STATUS.md
