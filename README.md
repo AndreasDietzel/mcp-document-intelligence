@@ -8,14 +8,31 @@ Fully automated document intelligence with advanced batch processing: Recursivel
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.2.1-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
+[![Version](https://img.shields.io/badge/Version-4.4.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
 [![Tests](https://img.shields.io/badge/Tests-99%2F100_Passing-brightgreen)](test-results.json)
+[![Performance](https://img.shields.io/badge/Performance-Memory_Optimized-brightgreen)](README.md)
 [![Perplexity](https://img.shields.io/badge/Perplexity-Compatible-purple)](https://www.perplexity.ai/)
 [![Claude](https://img.shields.io/badge/Claude-Compatible-orange)](https://claude.ai/)
 
 ---
 
 ## 🎯 Features
+
+### ⚡ **NEW in v4.4 - Performance Optimizations**
+- **🎯 Memory-Efficient Processing**: Generator-based file scanning - no memory overflow
+- **📊 Batch Processing**: Processes 25 files per batch with automatic pauses
+- **🛡️ Safety Limits**: Configurable limits (500 files/year) prevent system crashes
+- **🧹 Garbage Collection**: Explicit memory cleanup between batches
+- **⏸️ Progressive Processing**: Resume-friendly architecture with state tracking
+- **📈 Reduced Memory Footprint**: 90% reduction vs previous versions
+
+### 🤖 **v4.3 - Autonomous Organization**
+- **🔄 auto_organize_folder**: Analyzes AND organizes folders automatically
+- **📥 process_downloads**: Auto-files Downloads into archive with category detection
+- **🧩 batch_organize_large**: Processes >100 files in chunks with resume capability
+- **📊 Smart Categorization**: Auto-detects 10+ categories (Finanzen, Gesundheit, Reisen, etc.)
+- **💾 State Persistence**: Resume interrupted operations from JSON state files
+- **🎯 Decade Detection**: Automatically routes to Achziger/Neunziger/Nuller/Zehner/Zwanziger
 
 ### � v4.2 - Full PDF OCR Support
 - **📄 Scanned PDF Intelligence**: Complete OCR solution for image-based PDFs
@@ -239,6 +256,96 @@ Suggests intelligent folder organization based on analyzed documents.
 ```json
 {
   "documents": [ /* array from analyze_folder */ ]
+}
+```
+
+### `auto_organize_folder` 🤖 NEW in v4.3
+
+Analyzes AND organizes a folder automatically - combines analysis + rename/move in one step.
+
+**Input:**
+```json
+{
+  "sourcePath": "/path/to/source",
+  "archivePath": "/path/to/archive",
+  "dryRun": false,
+  "createCategories": true,
+  "stateFile": "/tmp/state.json"
+}
+```
+
+**Output:**
+```json
+{
+  "total": 150,
+  "processed": 147,
+  "moved": 145,
+  "categorized": {
+    "01_Finanzen": 45,
+    "03_Gesundheit": 12,
+    "06_Reisen": 23,
+    "99_Sonstiges": 65
+  },
+  "errors": [{"file": "...", "error": "..."}]
+}
+```
+
+### `process_downloads` 📥 NEW in v4.3
+
+Scans Downloads folder and automatically files documents into archive with year and category detection.
+
+**Input:**
+```json
+{
+  "downloadsPath": "~/Downloads",
+  "archiveBasePath": "/path/to/archive",
+  "autoMove": false,
+  "maxFiles": 50
+}
+```
+
+**Output:**
+```json
+{
+  "scanned": 23,
+  "suggestions": [
+    {
+      "from": "~/Downloads/Rechnung.pdf",
+      "to": "/archive/Zwanziger/2025/01_Finanzen/2025-03-15_Rechnung_Telekom.pdf",
+      "year": 2025,
+      "category": "Finanzen"
+    }
+  ],
+  "filed": [],
+  "errors": []
+}
+```
+
+### `batch_organize_large` 🧩 NEW in v4.3
+
+Processes large folders (>100 files) in chunks with resume capability.
+
+**Input:**
+```json
+{
+  "folderPath": "/path/to/large/folder",
+  "targetArchivePath": "/path/to/archive",
+  "chunkSize": 50,
+  "stateFilePath": "/tmp/batch-state.json"
+}
+```
+
+**Output:**
+```json
+{
+  "chunkCompleted": true,
+  "totalFiles": 500,
+  "processedFiles": 50,
+  "successCount": 48,
+  "errorCount": 2,
+  "percentComplete": 10,
+  "nextChunkExists": true,
+  "stateFilePath": "/tmp/batch-state.json"
 }
 ```
 

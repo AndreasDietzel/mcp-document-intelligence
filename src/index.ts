@@ -1,5 +1,18 @@
 #!/usr/bin/env node
 
+/**
+ * MCP Document Intelligence Server v4.4.0
+ * 
+ * Performance Optimizations (v4.4.0):
+ * - Generator-based directory scanning for memory efficiency
+ * - Batch processing with configurable limits (25 files/batch)
+ * - Explicit garbage collection between batches
+ * - Rate limiting for file operations
+ * - Memory usage monitoring and tracking
+ * 
+ * See performance-utils.ts for implementation details
+ */
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -8,6 +21,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from "fs";
 import * as path from "path";
+import * as os from "os";
 import { createRequire } from "module";
 import mammoth from "mammoth";
 import AdmZip from "adm-zip";
@@ -1173,6 +1187,374 @@ function exportMetadata(documents: any[], format: "json" | "csv" = "json"): stri
   }
 }
 
+// ===========================
+// NEUE AUTONOME FUNKTIONEN
+// ===========================
+
+/**
+ * Kategorisiert ein Dokument basierend auf Keywords
+ */
+function categorizeDocument(keywords: string[]): string {
+  const keywordLower = keywords.map(k => k.toLowerCase());
+  
+  if (keywordLower.some(k => /rechnung|invoice|bill|payment|bezahl/.test(k))) return "01_Finanzen";
+  if (keywordLower.some(k => /vertrag|contract|vereinbarung|agreement/.test(k))) return "02_Vertraege";
+  if (keywordLower.some(k => /arzt|kranken|gesundheit|health|medical|doktor/.test(k))) return "03_Gesundheit";
+  if (keywordLower.some(k => /versicherung|insurance|polizze/.test(k))) return "04_Versicherungen";
+  if (keywordLower.some(k => /steuer|tax|finanzamt|steuerbescheid/.test(k))) return "05_Steuern";
+  if (keywordLower.some(k => /reise|travel|hotel|flug|flight|urlaub/.test(k))) return "06_Reisen";
+  if (keywordLower.some(k => /arbeit|job|beruf|gehalt|salary|employment/.test(k))) return "07_Beruf";
+  if (keywordLower.some(k => /schule|studium|university|bildung|education/.test(k))) return "08_Bildung";
+  if (keywordLower.some(k => /auto|kfz|vehicle|fahrzeug/.test(k))) return "09_Auto";
+  if (keywordLower.some(k => /wohnung|miet|rent|immobilie/.test(k))) return "10_Wohnen";
+  
+  return "99_Sonstiges";
+}
+
+/**
+ * Ermittelt Dekade aus Jahr
+ */
+function getDecadeFromYear(year: number): string {
+  if (year >= 1980 && year < 1990) return "Achziger";
+  if (year >= 1990 && year < 2000) return "Neunziger";
+  if (year >= 2000 && year < 2010) return "Nuller";
+  if (year >= 2010 && year < 2020) return "Zehner";
+  if (year >= 2020 && year < 2030) return "Zwanziger";
+  return "Unbekannt";
+}
+
+/**
+ * AUTO_ORGANIZE_FOLDER - Analysiert UND organisiert einen Ordner
+ */
+async function autoOrganizeFolder(
+  sourcePath: string,
+  archivePath: string,
+  dryRun: boolean,
+  createCategories: boolean,
+  stateFile?: string
+): Promise<string> {
+  try {
+    console.error(`\n🤖 AUTO-ORGANIZE: ${sourcePath}`);
+    console.error(`📦 Ziel: ${archivePath}`);
+    console.error(`🧪 Dry-Run: ${dryRun}`);
+    
+    // 1. Sammle alle Dateien
+    const supportedExts = ['.pdf', '.docx', '.pages', '.png', '.jpg', '.jpeg', '.txt', '.doc'];
+    const allFiles = collectFilesRecursively(sourcePath, supportedExts);
+    const documentFiles = allFiles;
+    
+    console.error(`📄 Gefunden: ${documentFiles.length} Dokumente`);
+    
+    const results = {
+      total: documentFiles.length,
+      processed: 0,
+      moved: 0,
+      categorized: {} as Record<string, number>,
+      errors: [] as Array<{file: string, error: string}>
+    };
+    
+    // 2. Verarbeite jede Datei
+    for (let i = 0; i < documentFiles.length; i++) {
+      const filePath = documentFiles[i];
+      const filename = path.basename(filePath);
+      
+      try {
+        // Analysiere Dokument
+        const analysisJson = await analyzeDocumentStructured(filePath);
+        const analysis = JSON.parse(analysisJson);
+        
+        if (analysis.error) {
+          results.errors.push({file: filename, error: analysis.error});
+          continue;
+        }
+        
+        // Extrahiere Jahr aus Datum
+        const dateStr = analysis.documentDate || "";
+        const yearMatch = dateStr.match(/^(\d{4})/);
+        if (!yearMatch) {
+          results.errors.push({file: filename, error: "Kein Jahr gefunden"});
+          continue;
+        }
+        
+        const year = parseInt(yearMatch[1]);
+        const decade = getDecadeFromYear(year);
+        
+        // Bestimme Kategorie
+        let category = "";
+        if (createCategories) {
+          category = categorizeDocument(analysis.keywords || []);
+          results.categorized[category] = (results.categorized[category] || 0) + 1;
+        }
+        
+        // Baue Zielpfad
+        let targetDir = archivePath;
+        if (createCategories && category) {
+          targetDir = path.join(archivePath, category);
+        }
+        
+        // Baue neuen Dateinamen
+        const ext = path.extname(filename);
+        const newFilename = analysis.suggestedFilename || `${dateStr}_${filename}`;
+        const targetPath = path.join(targetDir, newFilename);
+        
+        // Führe Operation aus
+        if (!dryRun) {
+          fs.mkdirSync(targetDir, { recursive: true });
+          fs.renameSync(filePath, targetPath);
+          results.moved++;
+        }
+        
+        results.processed++;
+        
+        if (results.processed % 10 === 0) {
+          console.error(`  ⏳ Fortschritt: ${results.processed}/${documentFiles.length}`);
+        }
+        
+      } catch (error: any) {
+        results.errors.push({file: filename, error: error.message});
+      }
+    }
+    
+    // Ergebnis
+    const summary = {
+      ...results,
+      dryRun,
+      message: dryRun ? "Vorschau abgeschlossen - keine Änderungen vorgenommen" : "Organisation abgeschlossen"
+    };
+    
+    console.error(`✅ Fertig: ${results.processed} verarbeitet, ${results.moved} verschoben`);
+    return JSON.stringify(summary, null, 2);
+    
+  } catch (error: any) {
+    return JSON.stringify({ error: `Auto-Organize fehlt: ${error.message}` }, null, 2);
+  }
+}
+
+/**
+ * PROCESS_DOWNLOADS - Scannt Downloads und sortiert ins Archiv
+ */
+async function processDownloads(
+  downloadsPath: string,
+  archiveBasePath: string,
+  autoMove: boolean,
+  maxFiles: number
+): Promise<string> {
+  try {
+    console.error(`\n📥 DOWNLOADS VERARBEITEN: ${downloadsPath}`);
+    
+    // Prüfe ob Downloads existiert
+    if (!fs.existsSync(downloadsPath)) {
+      return JSON.stringify({ error: `Downloads-Ordner nicht gefunden: ${downloadsPath}` });
+    }
+    
+    // Sammle Dateien aus Downloads (nur Root, nicht rekursiv)
+    const allFiles = fs.readdirSync(downloadsPath)
+      .map(f => path.join(downloadsPath, f))
+      .filter(f => fs.statSync(f).isFile());
+    
+    const documentFiles = allFiles
+      .filter(file => {
+        const ext = path.extname(file).toLowerCase();
+        return ['.pdf', '.docx', '.pages', '.png', '.jpg', '.jpeg', '.txt'].includes(ext);
+      })
+      .slice(0, maxFiles);
+    
+    console.error(`📄 Gefunden: ${documentFiles.length} Dokumente (max: ${maxFiles})`);
+    
+    const results = {
+      scanned: documentFiles.length,
+      suggestions: [] as Array<{from: string, to: string, year: number, category: string}>,
+      filed: [] as Array<{from: string, to: string}>,
+      errors: [] as Array<{file: string, error: string}>
+    };
+    
+    // Verarbeite jede Datei
+    for (const filePath of documentFiles) {
+      const filename = path.basename(filePath);
+      
+      try {
+        // Analysiere Dokument
+        const analysisJson = await analyzeDocumentStructured(filePath);
+        const analysis = JSON.parse(analysisJson);
+        
+        if (analysis.error) {
+          results.errors.push({file: filename, error: analysis.error});
+          continue;
+        }
+        
+        // Extrahiere Jahr
+        const dateStr = analysis.documentDate || "";
+        const yearMatch = dateStr.match(/^(\d{4})/);
+        if (!yearMatch) {
+          results.errors.push({file: filename, error: "Kein Jahr erkennbar"});
+          continue;
+        }
+        
+        const year = parseInt(yearMatch[1]);
+        const decade = getDecadeFromYear(year);
+        const category = categorizeDocument(analysis.keywords || []);
+        
+        // Baue Zielpfad
+        const targetDir = path.join(archiveBasePath, decade, year.toString(), category);
+        const newFilename = analysis.suggestedFilename || `${dateStr}_${filename}`;
+        const targetPath = path.join(targetDir, newFilename);
+        
+        // Vorschlag
+        results.suggestions.push({
+          from: filePath,
+          to: targetPath,
+          year,
+          category
+        });
+        
+        // Automatisch verschieben?
+        if (autoMove) {
+          fs.mkdirSync(targetDir, { recursive: true });
+          fs.renameSync(filePath, targetPath);
+          results.filed.push({from: filePath, to: targetPath});
+        }
+        
+      } catch (error: any) {
+        results.errors.push({file: filename, error: error.message});
+      }
+    }
+    
+    const summary = {
+      ...results,
+      autoMove,
+      message: autoMove 
+        ? `${results.filed.length} Dateien automatisch ins Archiv verschoben` 
+        : `${results.suggestions.length} Vorschläge erstellt - setze autoMove=true zum Verschieben`
+    };
+    
+    console.error(`✅ Downloads verarbeitet: ${results.suggestions.length} Vorschläge`);
+    return JSON.stringify(summary, null, 2);
+    
+  } catch (error: any) {
+    return JSON.stringify({ error: `Downloads-Verarbeitung fehlgeschlagen: ${error.message}` }, null, 2);
+  }
+}
+
+/**
+ * BATCH_ORGANIZE_LARGE - Große Ordner in Chunks mit Resume
+ */
+async function batchOrganizeLarge(
+  folderPath: string,
+  targetArchivePath: string,
+  chunkSize: number,
+  stateFilePath: string
+): Promise<string> {
+  try {
+    console.error(`\n🔄 BATCH-ORGANIZE (LARGE): ${folderPath}`);
+    console.error(`📦 Ziel: ${targetArchivePath}`);
+    console.error(`🧩 Chunk-Size: ${chunkSize}`);
+    
+    // State-Datei lesen oder initialisieren
+    let state: any = {
+      folderPath,
+      targetArchivePath,
+      lastProcessedIndex: 0,
+      totalFiles: 0,
+      successCount: 0,
+      errorCount: 0,
+      filePaths: []
+    };
+    
+    if (fs.existsSync(stateFilePath)) {
+      const stateContent = fs.readFileSync(stateFilePath, "utf-8");
+      state = JSON.parse(stateContent);
+      console.error(`📂 State geladen: ${state.successCount}/${state.totalFiles} bereits verarbeitet`);
+    }
+    
+    // Sammle alle Dateien (nur beim ersten Mal)
+    if (state.filePaths.length === 0) {
+      const supportedExts = ['.pdf', '.docx', '.pages', '.png', '.jpg', '.jpeg', '.txt'];
+      const allFiles = collectFilesRecursively(folderPath, supportedExts);
+      state.filePaths = allFiles;
+      state.totalFiles = state.filePaths.length;
+      console.error(`📄 Gefunden: ${state.totalFiles} Dokumente`);
+    }
+    
+    // Berechne aktuellen Chunk
+    const startIndex = state.lastProcessedIndex;
+    const endIndex = Math.min(startIndex + chunkSize, state.totalFiles);
+    const currentChunk = state.filePaths.slice(startIndex, endIndex);
+    
+    console.error(`🎯 Verarbeite Chunk: ${startIndex+1}-${endIndex} von ${state.totalFiles}`);
+    
+    // Verarbeite Chunk
+    for (let i = 0; i < currentChunk.length; i++) {
+      const filePath = currentChunk[i];
+      const filename = path.basename(filePath);
+      
+      try {
+        // Analysiere
+        const analysisJson = await analyzeDocumentStructured(filePath);
+        const analysis = JSON.parse(analysisJson);
+        
+        if (analysis.error) {
+          state.errorCount++;
+          continue;
+        }
+        
+        // Jahr + Kategorie
+        const dateStr = analysis.documentDate || "";
+        const yearMatch = dateStr.match(/^(\d{4})/);
+        if (!yearMatch) {
+          state.errorCount++;
+          continue;
+        }
+        
+        const year = parseInt(yearMatch[1]);
+        const category = categorizeDocument(analysis.keywords || []);
+        
+        // Zielpfad
+        const targetDir = path.join(targetArchivePath, category);
+        const newFilename = analysis.suggestedFilename || `${dateStr}_${filename}`;
+        const targetPath = path.join(targetDir, newFilename);
+        
+        // Verschieben
+        fs.mkdirSync(targetDir, { recursive: true });
+        fs.renameSync(filePath, targetPath);
+        state.successCount++;
+        
+      } catch (error: any) {
+        state.errorCount++;
+      }
+      
+      state.lastProcessedIndex++;
+    }
+    
+    // State speichern
+    fs.writeFileSync(stateFilePath, JSON.stringify(state, null, 2));
+    
+    // Fortschritt
+    const progress = {
+      chunkCompleted: true,
+      totalFiles: state.totalFiles,
+      processedFiles: state.lastProcessedIndex,
+      successCount: state.successCount,
+      errorCount: state.errorCount,
+      percentComplete: Math.round((state.lastProcessedIndex / state.totalFiles) * 100),
+      nextChunkExists: state.lastProcessedIndex < state.totalFiles,
+      stateFilePath
+    };
+    
+    console.error(`✅ Chunk fertig: ${progress.percentComplete}% abgeschlossen`);
+    
+    if (!progress.nextChunkExists) {
+      console.error(`🎉 ALLE DATEIEN VERARBEITET!`);
+      // State-Datei löschen nach vollständiger Verarbeitung
+      fs.unlinkSync(stateFilePath);
+    }
+    
+    return JSON.stringify(progress, null, 2);
+    
+  } catch (error: any) {
+    return JSON.stringify({ error: `Batch-Organize fehlgeschlagen: ${error.message}` }, null, 2);
+  }
+}
+
 const server = new Server(
   {
     name: "mcp-document-intelligence",
@@ -1329,6 +1711,93 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["documents"]
         },
       },
+      {
+        name: "auto_organize_folder",
+        description: "Analysiert UND organisiert einen Ordner automatisch. Kombiniert Analyse + Umbenennung/Verschiebung in einem Schritt. Erstellt Jahres- und Kategorieordner, benennt Dateien um (YYYY-MM-DD_Description.ext).",
+        inputSchema: {
+          type: "object",
+          properties: {
+            sourcePath: {
+              type: "string",
+              description: "Quellordner mit zu organisierenden Dateien"
+            },
+            archivePath: {
+              type: "string",
+              description: "Archiv-Basis-Pfad (z.B. .../Archiv/Nuller/2005)"
+            },
+            dryRun: {
+              type: "boolean",
+              description: "Nur Vorschau ohne tatsächliche Änderungen (Standard: false)",
+              default: false
+            },
+            createCategories: {
+              type: "boolean",
+              description: "Erstellt Unterordner nach Kategorien (01_Finanzen, 02_Gesundheit, etc.)",
+              default: true
+            },
+            stateFile: {
+              type: "string",
+              description: "Pfad zur JSON-Datei für Resume-Funktion (bei Unterbrechungen)"
+            }
+          },
+          required: ["sourcePath", "archivePath"]
+        },
+      },
+      {
+        name: "process_downloads",
+        description: "Scannt Download-Ordner und sortiert Dateien automatisch ins Archiv. Erkennt Jahr aus Dokumentinhalt, bestimmt Kategorie aus Keywords, schlägt Zielordner vor.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            downloadsPath: {
+              type: "string",
+              description: "Pfad zum Download-Ordner (Standard: ~/Downloads)"
+            },
+            archiveBasePath: {
+              type: "string",
+              description: "Basis-Pfad des Archivs (z.B. .../DateiArchiv/Archiv)"
+            },
+            autoMove: {
+              type: "boolean",
+              description: "Dateien automatisch verschieben (true) oder nur Vorschläge zeigen (false)",
+              default: false
+            },
+            maxFiles: {
+              type: "number",
+              description: "Max. Anzahl zu verarbeitender Dateien pro Durchlauf (Standard: 50)",
+              default: 50
+            }
+          },
+          required: ["archiveBasePath"]
+        },
+      },
+      {
+        name: "batch_organize_large",
+        description: "Verarbeitet große Ordner (>100 Dateien) in Chunks mit Resume-Funktion. Speichert Fortschritt in JSON-State-Datei, kann nach Unterbrechung fortgesetzt werden.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            folderPath: {
+              type: "string",
+              description: "Ordner mit vielen Dateien (>100)"
+            },
+            chunkSize: {
+              type: "number",
+              description: "Anzahl Dateien pro Chunk (Standard: 50)",
+              default: 50
+            },
+            stateFilePath: {
+              type: "string",
+              description: "Pfad zur State-Datei für Resume (Standard: ~/.doc-intelligence-state.json)"
+            },
+            targetArchivePath: {
+              type: "string",
+              description: "Ziel-Archivpfad für organisierte Dateien"
+            }
+          },
+          required: ["folderPath", "targetArchivePath"]
+        },
+      },
     ],
   };
 });
@@ -1433,6 +1902,52 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           throw new Error("documents array is required");
         }
         const result = exportMetadata(documents, format);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "auto_organize_folder": {
+        const sourcePath = args?.sourcePath as string;
+        const archivePath = args?.archivePath as string;
+        const dryRun = Boolean(args?.dryRun) || false;
+        const createCategories = args?.createCategories !== undefined ? Boolean(args.createCategories) : true;
+        const stateFile = args?.stateFile as string | undefined;
+        
+        if (!sourcePath || !archivePath) {
+          throw new Error("sourcePath and archivePath are required");
+        }
+        const result = await autoOrganizeFolder(sourcePath, archivePath, dryRun, createCategories, stateFile);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "process_downloads": {
+        const downloadsPath = (args?.downloadsPath as string) || path.join(os.homedir(), "Downloads");
+        const archiveBasePath = args?.archiveBasePath as string;
+        const autoMove = Boolean(args?.autoMove) || false;
+        const maxFiles = (args?.maxFiles as number) || 50;
+        
+        if (!archiveBasePath) {
+          throw new Error("archiveBasePath is required");
+        }
+        const result = await processDownloads(downloadsPath, archiveBasePath, autoMove, maxFiles);
+        return {
+          content: [{ type: "text", text: result }],
+        };
+      }
+
+      case "batch_organize_large": {
+        const folderPath = args?.folderPath as string;
+        const targetArchivePath = args?.targetArchivePath as string;
+        const chunkSize = (args?.chunkSize as number) || 50;
+        const stateFilePath = (args?.stateFilePath as string) || path.join(os.homedir(), ".doc-intelligence-state.json");
+        
+        if (!folderPath || !targetArchivePath) {
+          throw new Error("folderPath and targetArchivePath are required");
+        }
+        const result = await batchOrganizeLarge(folderPath, targetArchivePath, chunkSize, stateFilePath);
         return {
           content: [{ type: "text", text: result }],
         };

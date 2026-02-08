@@ -1,7 +1,7 @@
 {
   "name": "mcp-document-intelligence",
-  "version": "4.2.1",
-  "description": "MCP Server with full PDF OCR support (scanned & text PDFs), intelligent filename generation, and comprehensive quality assurance",
+  "version": "4.4.0",
+  "description": "MCP Server with memory-optimized processing, autonomous organization, PDF OCR support, Downloads integration, and batch processing with resume capability",
   "type": "module",
   "main": "build/index.js",
   "bin": {

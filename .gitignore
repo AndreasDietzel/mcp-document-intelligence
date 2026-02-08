@@ -20,3 +20,16 @@ test-data/*.jpg
 test-data/*.png
 test-data/*.jpeg
 .backup_*.json
+
+# Python-Scripte mit persönlichen Pfaden
+process-*.py
+analyze-*.py
+check-status.py
+list-*.py
+full-status-check.py
+
+# Status-Dokumentation mit persönlichen Infos
+ARCHIV-STATUS.md
+NAECHSTE-SCHRITTE.md
+STATUS-REPORT.md
+PROBLEM-ANALYSIS.md
