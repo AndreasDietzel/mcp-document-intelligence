@@ -8,9 +8,10 @@ Fully automated document intelligence with advanced batch processing: Recursivel
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.5.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
+[![Version](https://img.shields.io/badge/Version-4.6.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
 [![Tests](https://img.shields.io/badge/Tests-99%2F100_Passing-brightgreen)](test-results.json)
 [![Performance](https://img.shields.io/badge/Performance-Memory_Optimized-brightgreen)](README.md)
+[![OCR](https://img.shields.io/badge/OCR-Tesseract_5.5.2-blue)](OCR-INTEGRATION.md)
 [![Perplexity](https://img.shields.io/badge/Perplexity-Compatible-purple)](https://www.perplexity.ai/)
 [![Claude](https://img.shields.io/badge/Claude-Compatible-orange)](https://claude.ai/)
 
@@ -18,7 +19,18 @@ Fully automated document intelligence with advanced batch processing: Recursivel
 
 ## 🎯 Features
 
-### ⚡ **NEW in v4.5 - Advanced Archive Management**
+### 🔍 **NEW in v4.6 - Automatic OCR Integration**
+- **📸 Auto-OCR for Scanned PDFs**: Automatically falls back to Tesseract OCR when text extraction yields < 50 characters
+- **🖼️ Image Support**: Process .jpg, .jpeg, .png files with OCR in all tools
+- **🇩🇪 German Language**: Pre-configured with German language support (`-l deu`)
+- **🏢 Enhanced Entity Detection**: Vodafone, Telekom, O2, DHL, Amazon now recognized
+- **📁 Fixed Categorization**: Vodafone → 11_Telekommunikation (not insurance!)
+- **⚡ Graceful Fallback**: pdftotext → OCR → empty string (30s timeout per file)
+- **📋 More Document Types**: Added Rezept, Kündigung, Mahnung patterns
+- **🌍 Full Archive Scan**: New script analyzed 693 files, improved 559 with OCR
+- **📚 Documentation**: Complete [OCR-INTEGRATION.md](OCR-INTEGRATION.md) guide
+
+### ⚡ **v4.5 - Advanced Archive Management**
 - **🧹 cleanup_old_structure**: Removes old folder hierarchies, consolidates into standard categories
 - **📁 optimize_folder_structure**: Deletes empty folders, moves single-file categories to 99_Sonstiges
 - **🤖 intelligent_rename**: PDF content analysis for smart naming (extracts companies, document types)
