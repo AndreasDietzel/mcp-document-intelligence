@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.0] - 2026-02-08
+
+### Added
+- **🔍 Automatic OCR Integration**: MCP server now automatically uses Tesseract OCR for all file operations
+  - Scanned PDFs automatically processed with OCR when text extraction yields < 50 characters
+  - Images (.jpg, .jpeg, .png) automatically analyzed with OCR
+  - German language support enabled by default (`-l deu`)
+- **📸 Image Support in intelligent_rename**: Now processes images in addition to PDFs
+- **🌍 Full Archive OCR Scan**: Script to analyze and rename entire archive with OCR
+- **🏢 Enhanced Entity Detection**: Added Vodafone, Telekom, O2, DHL, Amazon detection
+- **📁 Improved Categorization**: Vodafone correctly categorized as 11_Telekommunikation (not insurance)
+
+### Changed
+- **extractTextFromPDF()**: Now falls back to OCR for scanned PDFs automatically
+- **extractTextFromFile()**: New unified function supporting PDF, images, and text files
+- **intelligent_rename**: Now processes .jpg, .jpeg, .png in addition to .pdf files
+- **KNOWN_ENTITIES**: Added telekommunikation and post categories
+- **DOCUMENT_TYPES**: Added rezept, kuendigung, mahnung patterns
+
+### Fixed
+- **Vodafone Categorization**: Now correctly goes to 11_Telekommunikation instead of 04_Versicherungen
+- **Scanned PDFs**: No longer skipped, automatically processed with OCR
+- **Health Category**: Changed from 03_Gesundheit to 02_Gesundheit for consistency
+
+### Performance
+- **OCR Timeout**: 30 seconds per file prevents hanging
+- **Text Limit**: 5000 characters max to prevent memory issues
+- **Fallback Strategy**: PDF text → OCR → empty string (graceful degradation)
+
 ## [4.4.0] - 2026-02-08
 
 ### Added

@@ -391,8 +391,29 @@ export function moveLooseFiles(archiveBase: string): string {
 }
 
 /**
+ * Extracts text using Tesseract OCR (for images and scanned PDFs)
+ * Requires tesseract installed: brew install tesseract tesseract-lang
+ */
+async function extractOcrText(filePath: string): Promise<string> {
+  try {
+    const normalizedPath = normalizeUnicode(filePath);
+    const escapedPath = normalizedPath.replace(/'/g, "'\\''" );
+    
+    // Use German language support, PSM 1 for automatic page segmentation
+    const { stdout } = await execAsync(
+      `tesseract '${escapedPath}' stdout -l deu --psm 1 2>/dev/null | head -c 5000`,
+      { encoding: 'utf8', timeout: 30000 }
+    );
+    return stdout.trim();
+  } catch (error: any) {
+    return "";
+  }
+}
+
+/**
  * Extracts text from PDF using pdftotext (requires poppler installed)
  * Handles UTF-8 encoding and files with umlauts
+ * Automatically falls back to OCR for scanned PDFs
  */
 async function extractTextFromPDF(filePath: string): Promise<string> {
   try {
@@ -407,11 +428,45 @@ async function extractTextFromPDF(filePath: string): Promise<string> {
       `pdftotext -enc UTF-8 -l 3 '${escapedPath}' - 2>/dev/null | head -c 5000`,
       { encoding: 'utf8' }
     );
-    return stdout.trim();
+    
+    const text = stdout.trim();
+    
+    // If PDF has little text, try OCR (likely scanned PDF)
+    if (text.length < 50) {
+      const ocrText = await extractOcrText(filePath);
+      if (ocrText.length > text.length) {
+        return ocrText;
+      }
+    }
+    
+    return text;
   } catch (error: any) {
     console.error(`PDF extraction failed for ${path.basename(filePath)}: ${error.message}`);
-    return "";
+    // Try OCR as last resort
+    return await extractOcrText(filePath);
   }
+}
+
+/**
+ * Extracts text from various file types (PDF, images, text)
+ * Automatically uses OCR for images
+ */
+async function extractTextFromFile(filePath: string): Promise<string> {
+  const ext = path.extname(filePath).toLowerCase();
+  
+  if (ext === '.pdf') {
+    return await extractTextFromPDF(filePath);
+  } else if (['.jpg', '.jpeg', '.png', '.tif', '.tiff'].includes(ext)) {
+    return await extractOcrText(filePath);
+  } else if (['.txt', '.md'].includes(ext)) {
+    try {
+      return fs.readFileSync(filePath, 'utf8');
+    } catch {
+      return '';
+    }
+  }
+  
+  return '';
 }
 
 /**
@@ -420,10 +475,12 @@ async function extractTextFromPDF(filePath: string): Promise<string> {
 const KNOWN_ENTITIES: Record<string, string[]> = {
   versicherungen: ["hallesche", "huk", "axa", "allianz", "generali", "ergo", "ukv"],
   finanzen: ["ing", "postbank", "sparkasse", "commerzbank", "volksbank", "deutsche bank", "comdirect"],
-  gesundheit: ["arzt", "praxis", "apotheke", "krankenhaus", "klinik"],
+  gesundheit: ["arzt", "praxis", "apotheke", "krankenhaus", "klinik", "aok", "rezept"],
   steuern: ["finanzamt", "steuer"],
   auto: ["auto", "kfz", "reparatur", "werkstatt"],
-  wohnen: ["miete", "wohnung", "gas", "strom", "wasser", "eigentümerversammlung"]
+  wohnen: ["miete", "wohnung", "gas", "strom", "wasser", "eigentümerversammlung"],
+  telekommunikation: ["vodafone", "telekom", "o2", "1&1"],
+  post: ["dhl", "paket", "sendung", "amazon"]
 };
 
 /**
@@ -434,7 +491,10 @@ const DOCUMENT_TYPES: Record<string, RegExp> = {
   vertrag: /vertrag|contract/i,
   bescheid: /bescheid|notice/i,
   bestaetigung: /bestätigung|confirmation/i,
-  abrechnung: /abrechnung|statement/i
+  abrechnung: /abrechnung|statement/i,
+  rezept: /rezept|verschreibung/i,
+  kuendigung: /kündigung|cancellation/i,
+  mahnung: /mahnung|reminder/i
 };
 
 /**
@@ -456,7 +516,10 @@ export async function intelligentRename(archiveBase: string, dryRun: boolean = t
       
       for (const item of items) {
         if (totalProcessed >= maxFiles) break;
-        if (!item.toLowerCase().endsWith(".pdf")) continue;
+        
+        const ext = path.extname(item).toLowerCase();
+        // Support PDF, images
+        if (!['.pdf', '.jpg', '.jpeg', '.png'].includes(ext)) continue;
         if (item.startsWith(".")) continue;
         
         const itemPath = path.join(yearPath, item);
@@ -464,9 +527,9 @@ export async function intelligentRename(archiveBase: string, dryRun: boolean = t
         
         totalProcessed++;
         
-        // Extract PDF text
-        const text = await extractTextFromPDF(itemPath);
-        if (!text) {
+        // Extract text (with OCR support)
+        const text = await extractTextFromFile(itemPath);
+        if (!text || text.length < 20) {
           totalSkipped++;
           continue;
         }
@@ -483,10 +546,12 @@ export async function intelligentRename(archiveBase: string, dryRun: boolean = t
               // Map to category
               if (cat === "finanzen") category = "01_Finanzen";
               else if (cat === "versicherungen") category = "04_Versicherungen";
-              else if (cat === "gesundheit") category = "03_Gesundheit";
+              else if (cat === "gesundheit") category = "02_Gesundheit";
               else if (cat === "steuern") category = "05_Steuern";
               else if (cat === "auto") category = "09_Auto";
               else if (cat === "wohnen") category = "10_Wohnen";
+              else if (cat === "telekommunikation") category = "11_Telekommunikation";
+              else if (cat === "post") category = "06_Post_Paket";
               
               break;
             }
@@ -507,7 +572,7 @@ export async function intelligentRename(archiveBase: string, dryRun: boolean = t
         const dateMatch = item.match(/^(\d{4}-\d{2}-\d{2})/);
         const date = dateMatch ? dateMatch[1] : item.substring(0, 10);
         const entityPart = detectedEntity ? `_${detectedEntity.charAt(0).toUpperCase() + detectedEntity.slice(1)}` : "";
-        let newName = `${date}_${docType.charAt(0).toUpperCase() + docType.slice(1)}${entityPart}.pdf`;
+        let newName = `${date}_${docType.charAt(0).toUpperCase() + docType.slice(1)}${entityPart}${ext}`;
         
         // Sanitize filename (handle umlauts correctly)
         newName = sanitizeFilename(newName);
