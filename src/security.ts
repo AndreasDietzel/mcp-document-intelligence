@@ -28,6 +28,28 @@ export function normalizeUnicode(str: string): string {
 }
 
 /**
+ * Expand home directory tildes in paths.
+ * "~/Documents" → "/Users/username/Documents"
+ * Matches the official MCP filesystem server pattern.
+ */
+export function expandHome(filepath: string): string {
+  if (filepath === "~") return os.homedir();
+  if (filepath.startsWith("~/") || filepath.startsWith("~\\")) {
+    return path.join(os.homedir(), filepath.slice(1));
+  }
+  return filepath;
+}
+
+/**
+ * Trim whitespace and remove surrounding quotes from path strings.
+ * MCP clients sometimes send paths with extra quotes or whitespace.
+ */
+export function trimPath(p: string): string {
+  if (!p) return p;
+  return p.trim().replace(/^["']|["']$/g, "");
+}
+
+/**
  * Fix broken iCloud paths where MCP clients strip tildes.
  * "comappleCloudDocs" → "com~apple~CloudDocs"
  */

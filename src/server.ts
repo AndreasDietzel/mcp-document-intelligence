@@ -34,6 +34,8 @@ import {
   safeRenamePath,
   validateEnvironment,
   fixICloudPath,
+  expandHome,
+  trimPath,
 } from "./security.js";
 import { extractText } from "./extractor.js";
 import {
@@ -49,9 +51,9 @@ const config = loadConfig();
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Normalize + fix iCloud paths for all incoming paths */
+/** Normalize incoming paths: trim → expand ~ → fix iCloud → Unicode NFC */
 function normPath(p: string): string {
-  return fixICloudPath(normalizeUnicode(p));
+  return fixICloudPath(normalizeUnicode(expandHome(trimPath(p))));
 }
 
 function fileHash(filePath: string): string {
