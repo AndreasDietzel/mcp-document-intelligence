@@ -533,7 +533,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         let exactMatch: string | null = null;
 
         // Skip noisy directories that slow down search
-        const SKIP_DIRS = new Set(["node_modules", ".git", ".Trash", "Library", ".cache", ".npm", ".local"]);
+        const SKIP_DIRS = new Set([
+          "node_modules", ".git", ".Trash", ".cache", ".npm", ".local",
+          "Caches", "Logs", "Preferences", "Saved Application State",
+          "Application Support", "Containers", "Group Containers",
+          "Developer", "WebKit",
+        ]);
+        // Always traverse these even inside Library (iCloud lives here)
+        const ALLOW_DIRS = new Set(["Mobile Documents"]);
 
         // Dynamic Levenshtein threshold: scale with search term length
         const maxLev = Math.max(1, Math.min(3, Math.floor(search.length / 3)));
@@ -542,11 +549,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (depth > 6 || exactMatch) return;
           try {
             for (const item of fs.readdirSync(dir)) {
-              if (item.startsWith(".") || SKIP_DIRS.has(item)) continue;
+              if (item.startsWith(".")) continue;
+              if (SKIP_DIRS.has(item) && !ALLOW_DIRS.has(item)) continue;
               const full = path.join(dir, item);
               try {
                 if (!fs.statSync(full).isDirectory()) continue;
               } catch { continue; }
+
+              // Inside Library, only enter Mobile Documents
+              if (path.basename(dir) === "Library" && !ALLOW_DIRS.has(item)) continue;
 
               const lower = item.toLowerCase();
               if (lower === search) {
