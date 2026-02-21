@@ -79,7 +79,7 @@ nano ~/.config/perplexity/mcp.json
 
 Restart Perplexity after saving. Use `which node` to find your absolute Node.js path if needed.
 
-#### VS Code (GitHub Copilot)
+#### GitHub Copilot (VS Code)
 
 Add to your VS Code `settings.json`:
 
