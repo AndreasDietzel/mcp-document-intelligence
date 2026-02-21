@@ -65,11 +65,18 @@ function collectFiles(
   maxDepth = 10,
   depth = 0,
 ): string[] {
-  if (depth > maxDepth) return [];
+  if (depth > maxDepth) {
+    console.error(`[collectFiles] maxDepth ${maxDepth} reached at: ${dir}`);
+    return [];
+  }
   const results: string[] = [];
 
   try {
-    for (const item of fs.readdirSync(dir)) {
+    const items = fs.readdirSync(dir);
+    if (depth === 0) {
+      console.error(`[collectFiles] Scanning: ${dir} (${items.length} entries, recursive=${recursive})`);
+    }
+    for (const item of items) {
       if (item.startsWith(".")) continue;
       const full = path.join(dir, item);
 
@@ -84,10 +91,18 @@ function collectFiles(
           if (keywords?.length && !keywords.some((k) => item.toLowerCase().includes(k.toLowerCase()))) continue;
           results.push(full);
         }
-      } catch { continue; }
+      } catch (e: any) {
+        console.error(`[collectFiles] Error accessing ${full}: ${e.message}`);
+        continue;
+      }
     }
-  } catch { /* skip unreadable dirs */ }
+  } catch (e: any) {
+    console.error(`[collectFiles] Cannot read directory ${dir}: ${e.message}`);
+  }
 
+  if (depth === 0) {
+    console.error(`[collectFiles] Found ${results.length} supported files`);
+  }
   return results;
 }
 
@@ -337,24 +352,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // ── scan_directory ──
       case "scan_directory": {
         const dirPath = normalizeUnicode(a.path);
+        console.error(`[scan_directory] path="${dirPath}" recursive=${a.recursive}`);
         const v = validateDirPath(dirPath);
         if (!v.valid) return err(v.error!);
 
         const files = collectFiles(dirPath, !!a.recursive);
         const results = [];
+        const errors: Array<{ file: string; error: string }> = [];
+        let skippedSize = 0;
 
         for (const f of files) {
-          const st = fs.statSync(f);
-          if (st.size > config.maxFileSize) continue;
-          const text = await extractText(f, config);
-          results.push({
-            filename: path.basename(f),
-            path: f,
-            size: st.size,
-            content: text.slice(0, config.maxTextPreview),
-            fullContentAvailable: text.length > config.maxTextPreview,
-          });
+          try {
+            const st = fs.statSync(f);
+            if (st.size > config.maxFileSize) { skippedSize++; continue; }
+            const text = await extractText(f, config);
+            results.push({
+              filename: path.basename(f),
+              path: f,
+              size: st.size,
+              content: text.slice(0, config.maxTextPreview),
+              fullContentAvailable: text.length > config.maxTextPreview,
+            });
+          } catch (e: any) {
+            errors.push({ file: path.basename(f), error: e.message });
+          }
         }
+
+        // Diagnostic info when no results
+        if (results.length === 0) {
+          const diag: any = {
+            scannedPath: dirPath,
+            recursive: !!a.recursive,
+            filesFound: files.length,
+            skippedOversize: skippedSize,
+            extractionErrors: errors,
+          };
+          // Show what's in the directory
+          try {
+            const entries = fs.readdirSync(dirPath).filter((e: string) => !e.startsWith('.'));
+            diag.directoryContents = entries.map((e: string) => {
+              const fp = path.join(dirPath, e);
+              try {
+                const s = fs.statSync(fp);
+                return { name: e, type: s.isDirectory() ? 'directory' : 'file', size: s.size };
+              } catch { return { name: e, type: 'unknown' }; }
+            });
+          } catch { /* ignore */ }
+          return ok({ documents: [], diagnostic: diag });
+        }
+
         return ok(results);
       }
 
