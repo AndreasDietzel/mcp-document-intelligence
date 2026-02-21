@@ -28,6 +28,28 @@ export function normalizeUnicode(str: string): string {
 }
 
 /**
+ * Fix broken iCloud paths where MCP clients strip tildes.
+ * "comappleCloudDocs" → "com~apple~CloudDocs"
+ */
+export function fixICloudPath(inputPath: string): string {
+  if (!inputPath) return inputPath;
+  // Fix the most common pattern: "comappleCloudDocs" → "com~apple~CloudDocs"
+  let fixed = inputPath.replace(
+    /Mobile Documents\/comappleCloudDocs/g,
+    "Mobile Documents/com~apple~CloudDocs",
+  );
+  // Also handle other iCloud container patterns: "comapple<Name>" → "com~apple~<Name>"
+  fixed = fixed.replace(
+    /Mobile Documents\/comapple([A-Z])/g,
+    "Mobile Documents/com~apple~$1",
+  );
+  if (fixed !== inputPath) {
+    console.error(`[fixICloudPath] Repaired: "${inputPath}" → "${fixed}"`);
+  }
+  return fixed;
+}
+
+/**
  * Sanitize filename — removes dangerous characters, preserves umlauts.
  */
 export function sanitizeFilename(filename: string): string {

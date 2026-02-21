@@ -33,6 +33,7 @@ import {
   validateDirPath,
   safeRenamePath,
   validateEnvironment,
+  fixICloudPath,
 } from "./security.js";
 import { extractText } from "./extractor.js";
 import {
@@ -47,6 +48,11 @@ import { recordOperation, undoLastBatch, getUndoStats } from "./undo.js";
 const config = loadConfig();
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
+
+/** Normalize + fix iCloud paths for all incoming paths */
+function normPath(p: string): string {
+  return fixICloudPath(normalizeUnicode(p));
+}
 
 function fileHash(filePath: string): string {
   try {
@@ -351,7 +357,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (name) {
       // ── scan_directory ──
       case "scan_directory": {
-        const dirPath = normalizeUnicode(a.path);
+        const dirPath = normPath(a.path);
         console.error(`[scan_directory] path="${dirPath}" recursive=${a.recursive}`);
         const v = validateDirPath(dirPath);
         if (!v.valid) return err(v.error!);
@@ -406,7 +412,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ── analyze_document ──
       case "analyze_document": {
-        const fp = normalizeUnicode(a.filePath);
+        const fp = normPath(a.filePath);
         const v = validateFilePath(fp);
         if (!v.valid) return err(v.error!);
         return ok(await analyzeDocument(fp));
@@ -414,7 +420,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ── analyze_folder ──
       case "analyze_folder": {
-        const fp = normalizeUnicode(a.folderPath);
+        const fp = normPath(a.folderPath);
         const v = validateDirPath(fp);
         if (!v.valid) return err(v.error!);
 
@@ -458,7 +464,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ── rename_document ──
       case "rename_document": {
-        const origPath = normalizeUnicode(a.originalPath);
+        const origPath = normPath(a.originalPath);
         const newName = normalizeUnicode(a.newName);
         if (!fs.existsSync(origPath)) return err("File not found");
 
@@ -475,8 +481,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ── move_document ──
       case "move_document": {
-        const src = normalizeUnicode(a.filePath);
-        const targetDir = normalizeUnicode(a.targetDirectory);
+        const src = normPath(a.filePath);
+        const targetDir = normPath(a.targetDirectory);
         if (!fs.existsSync(src)) return err("Source file not found");
         if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
 
@@ -489,7 +495,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ── smart_rename ──
       case "smart_rename": {
-        const fp = normalizeUnicode(a.filePath);
+        const fp = normPath(a.filePath);
         const v = validateFilePath(fp);
         if (!v.valid) return err(v.error!);
 
@@ -519,7 +525,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // ── find_folder ──
       case "find_folder": {
         const folderName = normalizeUnicode(a.folderName);
-        const basePath = normalizeUnicode(a.basePath || os.homedir());
+        const basePath = normPath(a.basePath || os.homedir());
         if (!folderName) return err("folderName is required");
 
         const search = folderName.toLowerCase();
@@ -589,7 +595,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ── batch_organize ──
       case "batch_organize": {
-        const baseFolder = normalizeUnicode(a.baseFolder);
+        const baseFolder = normPath(a.baseFolder);
         const ops = a.operations as Array<{ originalPath: string; targetFolder: string; newFilename: string }>;
         const mode: "move" | "copy" = a.mode || "move";
         if (!ops?.length) return err("No operations provided");
@@ -630,8 +636,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ── auto_organize ──
       case "auto_organize": {
-        const src = normalizeUnicode(a.sourcePath);
-        const dst = normalizeUnicode(a.archivePath);
+        const src = normPath(a.sourcePath);
+        const dst = normPath(a.archivePath);
         const dryRun = a.dryRun ?? false;
         const v = validateDirPath(src);
         if (!v.valid) return err(v.error!);
@@ -664,8 +670,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       // ── process_downloads ──
       case "process_downloads": {
-        const dlPath = normalizeUnicode(a.downloadsPath || path.join(os.homedir(), "Downloads"));
-        const archivePath = normalizeUnicode(a.archiveBasePath);
+        const dlPath = normPath(a.downloadsPath || path.join(os.homedir(), "Downloads"));
+        const archivePath = normPath(a.archiveBasePath);
         const autoMove = a.autoMove ?? false;
         const maxFiles = a.maxFiles ?? 50;
 
