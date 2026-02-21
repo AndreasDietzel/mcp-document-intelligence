@@ -40,7 +40,9 @@ npm install
 npm run build
 ```
 
-### 2. Configure Claude Desktop
+### 2. Connect to an MCP Client
+
+#### Claude Desktop
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -50,6 +52,45 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "document-intelligence": {
       "command": "node",
       "args": ["/absolute/path/to/mcp-document-intelligence/build/server.js"]
+    }
+  }
+}
+```
+
+#### Perplexity Desktop
+
+Add to `~/.config/perplexity/mcp.json` (create the file if it doesn't exist):
+
+```bash
+mkdir -p ~/.config/perplexity
+nano ~/.config/perplexity/mcp.json
+```
+
+```json
+{
+  "mcpServers": {
+    "document-intelligence": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-document-intelligence/build/server.js"]
+    }
+  }
+}
+```
+
+Restart Perplexity after saving. Use `which node` to find your absolute Node.js path if needed.
+
+#### VS Code (GitHub Copilot)
+
+Add to your VS Code `settings.json`:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "document-intelligence": {
+        "command": "node",
+        "args": ["/absolute/path/to/mcp-document-intelligence/build/server.js"]
+      }
     }
   }
 }
