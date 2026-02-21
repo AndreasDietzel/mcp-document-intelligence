@@ -524,44 +524,65 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         const search = folderName.toLowerCase();
         const matches: Array<{ path: string; score: number }> = [];
+        let exactMatch: string | null = null;
+
+        // Skip noisy directories that slow down search
+        const SKIP_DIRS = new Set(["node_modules", ".git", ".Trash", "Library", ".cache", ".npm", ".local"]);
+
+        // Dynamic Levenshtein threshold: scale with search term length
+        const maxLev = Math.max(1, Math.min(3, Math.floor(search.length / 3)));
 
         function walk(dir: string, depth: number) {
-          if (depth > 5) return;
+          if (depth > 6 || exactMatch) return;
           try {
             for (const item of fs.readdirSync(dir)) {
-              if (item.startsWith(".")) continue;
+              if (item.startsWith(".") || SKIP_DIRS.has(item)) continue;
               const full = path.join(dir, item);
               try {
                 if (!fs.statSync(full).isDirectory()) continue;
               } catch { continue; }
 
               const lower = item.toLowerCase();
-              if (lower === search) { matches.push({ path: full, score: 0 }); return; }
-              if (lower.includes(search) || search.includes(lower)) {
-                matches.push({ path: full, score: levenshtein(search, lower) });
+              if (lower === search) {
+                matches.push({ path: full, score: 0 });
+                exactMatch = full;
+                return; // exact match found, stop
+              }
+              if (lower.includes(search)) {
+                matches.push({ path: full, score: 1 });
+              } else if (search.includes(lower)) {
+                matches.push({ path: full, score: 2 });
               } else {
                 const d = levenshtein(search, lower);
-                if (d <= 3) matches.push({ path: full, score: d });
+                if (d <= maxLev) matches.push({ path: full, score: d + 10 });
               }
               walk(full, depth + 1);
             }
-          } catch { /* skip */ }
+          } catch { /* skip unreadable dirs */ }
         }
         walk(basePath, 0);
         matches.sort((x, y) => x.score - y.score);
 
-        if (matches.length === 0) {
+        // Deduplicate and limit results
+        const seen = new Set<string>();
+        const unique = matches.filter((m) => {
+          if (seen.has(m.path)) return false;
+          seen.add(m.path);
+          return true;
+        });
+
+        if (unique.length === 0) {
           return ok({ found: false, searchTerm: folderName, basePath });
         }
 
         return ok({
           found: true,
-          bestMatch: { fullPath: matches[0].path, name: path.basename(matches[0].path) },
-          totalMatches: matches.length,
-          suggestions: matches.slice(0, 5).map((m) => ({
+          bestMatch: { fullPath: unique[0].path, name: path.basename(unique[0].path) },
+          totalMatches: unique.length,
+          suggestions: unique.slice(0, 10).map((m) => ({
             path: m.path,
             name: path.basename(m.path),
-            similarity: m.score === 0 ? "exact" : `${m.score} chars diff`,
+            similarity: m.score === 0 ? "exact" : m.score <= 2 ? "contains" : `${m.score - 10} chars diff`,
           })),
         });
       }
