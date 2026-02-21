@@ -182,12 +182,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "scan_directory",
-      description: "Scan a directory for documents and return filename + content preview (OCR-enabled). Supports PDF, DOCX, DOC, Pages, images, TXT, RTF, ODT.",
+      description: "Scan a directory for documents. Returns filename, path, size, and optionally a text preview (OCR-enabled). Use listOnly=true for fast directory listing without text extraction. Supports PDF, DOCX, DOC, Pages, images, TXT, RTF, ODT.",
       inputSchema: {
         type: "object" as const,
         properties: {
           path: { type: "string" as const, description: "Absolute path to directory" },
           recursive: { type: "boolean" as const, description: "Scan subdirectories (default: false)" },
+          limit: { type: "number" as const, description: "Max files to return (default: 50). Use 0 for no limit." },
+          listOnly: { type: "boolean" as const, description: "If true, return only filenames/paths/sizes without text extraction (much faster for large directories, default: false)" },
+          offset: { type: "number" as const, description: "Skip the first N files (for pagination, default: 0)" },
         },
         required: ["path"],
       },
@@ -358,11 +361,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // ── scan_directory ──
       case "scan_directory": {
         const dirPath = normPath(a.path);
-        console.error(`[scan_directory] path="${dirPath}" recursive=${a.recursive}`);
+        const limit = typeof a.limit === "number" ? a.limit : 50;
+        const listOnly = !!a.listOnly;
+        const offset = typeof a.offset === "number" ? Math.max(0, a.offset) : 0;
+        console.error(`[scan_directory] path="${dirPath}" recursive=${a.recursive} limit=${limit} listOnly=${listOnly} offset=${offset}`);
         const v = validateDirPath(dirPath);
         if (!v.valid) return err(v.error!);
 
-        const files = collectFiles(dirPath, !!a.recursive);
+        const allFiles = collectFiles(dirPath, !!a.recursive);
+        const totalFiles = allFiles.length;
+
+        // Apply offset and limit
+        const effectiveLimit = limit === 0 ? allFiles.length : limit;
+        const files = allFiles.slice(offset, offset + effectiveLimit);
+
+        console.error(`[scan_directory] totalFiles=${totalFiles}, returning ${files.length} (offset=${offset}, limit=${effectiveLimit})`);
+
+        // Fast list-only mode: return filenames, paths, sizes — no text extraction
+        if (listOnly) {
+          const listing = files.map((f) => {
+            try {
+              const st = fs.statSync(f);
+              return {
+                filename: path.basename(f),
+                path: f,
+                size: st.size,
+                directory: path.dirname(f),
+              };
+            } catch {
+              return { filename: path.basename(f), path: f, size: 0, directory: path.dirname(f) };
+            }
+          });
+          return ok({
+            documents: listing,
+            totalFiles,
+            returned: listing.length,
+            offset,
+            hasMore: offset + listing.length < totalFiles,
+          });
+        }
+
+        // Full mode: extract text previews
         const results = [];
         const errors: Array<{ file: string; error: string }> = [];
         let skippedSize = 0;
@@ -385,15 +424,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         // Diagnostic info when no results
-        if (results.length === 0) {
+        if (results.length === 0 && totalFiles === 0) {
           const diag: any = {
             scannedPath: dirPath,
             recursive: !!a.recursive,
-            filesFound: files.length,
+            filesFound: 0,
             skippedOversize: skippedSize,
             extractionErrors: errors,
           };
-          // Show what's in the directory
           try {
             const entries = fs.readdirSync(dirPath).filter((e: string) => !e.startsWith('.'));
             diag.directoryContents = entries.map((e: string) => {
@@ -407,7 +445,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           return ok({ documents: [], diagnostic: diag });
         }
 
-        return ok(results);
+        return ok({
+          documents: results,
+          totalFiles,
+          returned: results.length,
+          offset,
+          hasMore: offset + effectiveLimit < totalFiles,
+          skippedOversize: skippedSize,
+          errors: errors.length > 0 ? errors : undefined,
+        });
       }
 
       // ── analyze_document ──
