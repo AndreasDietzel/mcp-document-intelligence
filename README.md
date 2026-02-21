@@ -119,7 +119,7 @@ brew install tesseract tesseract-lang poppler
 
 | Tool | Purpose |
 |---|---|
-| `scan_directory` | List documents with content preview |
+| `scan_directory` | List documents with optional content preview. Supports `limit`, `offset` (pagination), and `listOnly` mode for fast listing of large directories |
 | `analyze_document` | Deep analysis: dates, references, keywords, AI classification |
 | `analyze_folder` | Batch analysis with duplicate detection and performance metrics |
 
@@ -164,9 +164,34 @@ src/
 
 - **Functional Suitability** — Complete document lifecycle from scan to organize
 - **Performance Efficiency** — Lazy-loaded optional deps, batch processing, streaming
-- **Security** — Path traversal protection, input validation, API key masking, Unicode normalization
+- **Security** — Path traversal protection, input validation, API key masking, Unicode normalization, iCloud path repair
 - **Reliability** — Graceful OCR/AI degradation, undo/rollback, error isolation per file
 - **Maintainability** — Clean module separation, typed interfaces, zero circular deps
+
+## Path Normalization
+
+All incoming paths pass through a robust normalization pipeline (matching patterns from the official MCP filesystem server):
+
+```
+Input → trimPath()        → Remove quotes and whitespace
+      → expandHome()      → ~/path → /Users/username/path
+      → fixICloudPath()   → comappleCloudDocs → com~apple~CloudDocs
+      → normalizeUnicode() → NFD → NFC (macOS APFS compatibility)
+```
+
+This handles common issues with MCP clients that mangle paths — especially Perplexity Desktop stripping tildes from iCloud paths.
+
+## scan_directory Parameters
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `path` | string | *required* | Absolute path to directory |
+| `recursive` | boolean | `false` | Include subdirectories |
+| `limit` | number | `50` | Max files to return (0 = no limit) |
+| `offset` | number | `0` | Skip first N files (pagination) |
+| `listOnly` | boolean | `false` | Fast mode: filenames + sizes only, no text extraction |
+
+Response includes `totalFiles`, `returned`, `offset`, and `hasMore` for pagination through large directories.
 
 ## Configuration
 
