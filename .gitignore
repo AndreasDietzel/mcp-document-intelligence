@@ -6,3 +6,4 @@ dist/
 .env
 .env.local
 .backup_*.json
+.mcp-doc-intel.json
