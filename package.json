@@ -1,29 +1,30 @@
 {
   "name": "mcp-document-intelligence",
-  "version": "4.6.0",
-  "description": "MCP Server with automatic OCR integration, memory-optimized processing, intelligent categorization, and comprehensive document analysis",
+  "version": "5.0.0",
+  "description": "MCP server for intelligent document analysis, OCR, AI-powered classification (Perplexity), and file organization — built for Claude Desktop, VS Code, and other MCP clients",
   "type": "module",
-  "main": "build/index.js",
+  "main": "build/server.js",
   "bin": {
-    "mcp-document-intelligence": "./build/index.js"
+    "mcp-document-intelligence": "./build/server.js"
   },
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",
-    "start": "node build/index.js",
-    "prepare": "npm run build"
+    "start": "node build/server.js"
   },
   "keywords": [
     "mcp",
     "model-context-protocol",
+    "document-intelligence",
     "pdf",
     "ocr",
-    "document-management",
-    "filename-generation",
     "tesseract",
-    "pdf-parse"
+    "perplexity-ai",
+    "document-management",
+    "smart-rename",
+    "iso-25010"
   ],
-  "author": "",
+  "author": "Andreas Dietzel",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",

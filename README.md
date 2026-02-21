@@ -1,128 +1,37 @@
-# MCP Document Intelligence Server
-
-**Model Context Protocol Server with Advanced Batch Processing & Intelligent Document Organization**
-
-🎯 **Designed for [Perplexity Desktop](https://www.perplexity.ai/) and [Claude Desktop](https://claude.ai/download)** – Supercharge your AI assistant with enterprise-grade document intelligence.
-
-Fully automated document intelligence with advanced batch processing: Recursively scan folders, detect duplicates, extract metadata from PDFs, DOCX, Pages, images and text files (with OCR for scanned documents), preview changes before execution, backup/undo operations, export metadata, and automatically organize documents with intelligent folder structures.
-
-[![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-4.6.0-green)](https://github.com/AndreasDietzel/mcp-document-intelligence)
-[![Tests](https://img.shields.io/badge/Tests-99%2F100_Passing-brightgreen)](test-results.json)
-[![Performance](https://img.shields.io/badge/Performance-Memory_Optimized-brightgreen)](README.md)
-[![OCR](https://img.shields.io/badge/OCR-Tesseract_5.5.2-blue)](OCR-INTEGRATION.md)
-[![Perplexity](https://img.shields.io/badge/Perplexity-Compatible-purple)](https://www.perplexity.ai/)
-[![Claude](https://img.shields.io/badge/Claude-Compatible-orange)](https://claude.ai/)
-
----
-
-## 🎯 Features
-
-### 🔍 **NEW in v4.6 - Automatic OCR Integration**
-- **📸 Auto-OCR for Scanned PDFs**: Automatically falls back to Tesseract OCR when text extraction yields < 50 characters
-- **🖼️ Image Support**: Process .jpg, .jpeg, .png files with OCR in all tools
-- **🇩🇪 German Language**: Pre-configured with German language support (`-l deu`)
-- **🏢 Enhanced Entity Detection**: Vodafone, Telekom, O2, DHL, Amazon now recognized
-- **📁 Fixed Categorization**: Vodafone → 11_Telekommunikation (not insurance!)
-- **⚡ Graceful Fallback**: pdftotext → OCR → empty string (30s timeout per file)
-- **📋 More Document Types**: Added Rezept, Kündigung, Mahnung patterns
-- **🌍 Full Archive Scan**: New script analyzed 693 files, improved 559 with OCR
-- **📚 Documentation**: Complete [OCR-INTEGRATION.md](OCR-INTEGRATION.md) guide
-
-### ⚡ **v4.5 - Advanced Archive Management**
-- **🧹 cleanup_old_structure**: Removes old folder hierarchies, consolidates into standard categories
-- **📁 optimize_folder_structure**: Deletes empty folders, moves single-file categories to 99_Sonstiges
-- **🤖 intelligent_rename**: PDF content analysis for smart naming (extracts companies, document types)
-- **📋 move_loose_files**: Pattern-based categorization for loose files
-- **🎯 Production Ready**: Tested with 2,714 files, fully automated workflow
-- **📚 Complete Documentation**: [PRODUCTION-SETUP.md](PRODUCTION-SETUP.md) and [TESTFALL-PERPLEXITY.md](TESTFALL-PERPLEXITY.md)
-
-### ⚡ **v4.4 - Performance Optimizations**
-- **🎯 Memory-Efficient Processing**: Generator-based file scanning - no memory overflow
-- **📊 Batch Processing**: Processes 25 files per batch with automatic pauses
-- **🛡️ Safety Limits**: Configurable limits (500 files/year) prevent system crashes
-- **🧹 Garbage Collection**: Explicit memory cleanup between batches
-- **⏸️ Progressive Processing**: Resume-friendly architecture with state tracking
-- **📈 Reduced Memory Footprint**: 90% reduction vs previous versions
-
-### 🤖 **v4.3 - Autonomous Organization**
-- **🔄 auto_organize_folder**: Analyzes AND organizes folders automatically
-- **📥 process_downloads**: Auto-files Downloads into archive with category detection
-- **🧩 batch_organize_large**: Processes >100 files in chunks with resume capability
-- **📊 Smart Categorization**: Auto-detects 10+ categories (Finanzen, Gesundheit, Reisen, etc.)
-- **💾 State Persistence**: Resume interrupted operations from JSON state files
-- **🎯 Decade Detection**: Automatically routes to Achziger/Neunziger/Nuller/Zehner/Zwanziger
-
-### � v4.2 - Full PDF OCR Support
-- **📄 Scanned PDF Intelligence**: Complete OCR solution for image-based PDFs
-- **🤖 Automatic Detection**: Smart fallback from text extraction to OCR (<50 chars triggers OCR)
-- **📊 Quality Metrics**: OCR confidence scores and quality assessment
-- **⚡ Optimized Processing**: PDF.js rendering + Tesseract OCR (up to 5 pages)
-- **🌍 German Language Model**: Pre-configured for local documents
-- **📜 Apache-2.0 Licensed**: No licensing issues with PDF.js (Mozilla)
-
-### �🚀 v4.1 - Quality & Performance Enhancements
-- **🧪 Comprehensive Testing**: 100 automated test cases with 99% pass rate
-- **📊 Performance Metrics**: Real-time processing stats and throughput reporting
-- **🔍 Enhanced Validation**: File size, name length, and type validation
-- **🌐 Better Encoding Detection**: Automatic UTF-8/Latin-1 switching with reporting
-- **⚡ Optimized Processing**: Average <100ms per file, batch <2000ms
-- **🛡️ Robust Error Handling**: Structured errors with actionable suggestions
-
-### 🚀 v4.0 - Enterprise Features
-- **🔍 Recursive Scanning**: Deep folder analysis up to 10 levels
-- **👥 Duplicate Detection**: SHA256-based file deduplication
-- **👁️ Preview Mode**: Dry-run operations before execution
-- **⏮️ Backup & Undo**: Automatic backups with one-click restore
-- **📊 Metadata Export**: Export analysis results to JSON/CSV
-- **🎯 Smart Filters**: Filter by file type and keywords
-- **📋 Copy Mode**: Copy files instead of moving them
-- **⚙️ Configurable Rules**: Custom folder organization patterns
-- **🎨 OCR Quality Feedback**: Confidence scores for scanned documents
-- **📈 Detailed Statistics**: Comprehensive operation summaries
-
-### 📦 Batch Document Processing
-- **Folder Scanning**: Analyze entire folders recursively in one operation
-- **Batch Organization**: Rename and move multiple files automatically
-- **Smart Folder Structure**: Auto-generate organized folder hierarchies
-- **Workflow Automation**: Scan → Analyze → Preview → Organize → Undo
-
-### �📄 Multi-Format Document Intelligence
-- **Text Extraction**: Extract text from PDF, DOCX, Pages, Images, TXT
-- **Full PDF OCR**: PDF.js + Tesseract.js for scanned PDFs (automatic fallback)
-- **OCR Quality Scoring**: Confidence metrics and quality assessment for all OCR operations
-- **Multi-Encoding Support**: Automatic detection and handling of UTF-8, Latin-1/ISO-8859-1
-- **Robust Parsing**: Handles null-bytes, special characters, and unusual file names
-- **Smart Filename Suggestions**: Automatically extracts:
-  - Scanner timestamps (preserves existing `2024-01-24_14-30-45` format)
-  - Document dates (DD.MM.YYYY, YYYY-MM-DD)
-  - Reference numbers (Invoice#, Customer#, Order#, Contract#)
-  - Keywords (Invoice, Contract, Company names)
-
----
-
-## 🚀 Quick Start
-
-### System Requirements
-
-For full PDF-OCR support, install these system tools:
-
-```bash
-# macOS (via Homebrew)
-brew install tesseract tesseract-lang  # OCR engine with all languages
-brew install poppler                    # PDF rendering tools (pdftoppm)
+```
+ ██████╗  ██████╗  ██████╗    ██╗███╗   ██╗████████╗███████╗██╗     
+ ██╔══██╗██╔═══██╗██╔════╝    ██║████╗  ██║╚══██╔══╝██╔════╝██║     
+ ██║  ██║██║   ██║██║         ██║██╔██╗ ██║   ██║   █████╗  ██║     
+ ██║  ██║██║   ██║██║         ██║██║╚██╗██║   ██║   ██╔══╝  ██║     
+ ██████╔╝╚██████╔╝╚██████╗   ██║██║ ╚████║   ██║   ███████╗███████╗
+ ╚═════╝  ╚═════╝  ╚═════╝   ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚══════╝
+ ─────────────────── M C P   S E R V E R   v 5 . 0 ───────────────────
+              D O C U M E N T   I N T E L L I G E N C E
 ```
 
-### Prerequisites
+A **Model Context Protocol** server for intelligent document analysis, OCR processing, AI-powered classification, and automated file organization.
 
-You need one of these AI desktop clients:
-- **[Perplexity Desktop App](https://www.perplexity.ai/)** (macOS/Windows)
-- **[Claude Desktop App](https://claude.ai/download)** (macOS/Windows)
+Built for **Claude Desktop**, **VS Code Copilot**, and any MCP-compatible AI assistant.
 
-Both support the Model Context Protocol (MCP) for extending AI capabilities with custom tools.
+---
 
-### Installation
+## Features
+
+| Feature | Description |
+|---|---|
+| **Multi-Format Extraction** | PDF, DOCX, DOC, Pages (IWA + legacy), TXT, RTF, ODT, images |
+| **OCR Engine** | Tesseract + pdftoppm for scanned documents and images |
+| **AI Classification** | Perplexity AI integration for intelligent categorization |
+| **Smart Rename** | AI-powered filename generation from document content |
+| **Batch Processing** | Organize entire folders with one command |
+| **Undo / Rollback** | Every rename/move operation is tracked and reversible |
+| **Downloads Sorting** | Scan ~/Downloads and auto-sort into archive folders |
+| **ISO 25010 Security** | Input validation, path traversal protection, API key masking |
+| **Duplicate Detection** | SHA-256 hash comparison across folder scans |
+
+## Quick Start
+
+### 1. Install
 
 ```bash
 git clone https://github.com/AndreasDietzel/mcp-document-intelligence.git
@@ -131,554 +40,129 @@ npm install
 npm run build
 ```
 
-### Configuration
+### 2. Configure Claude Desktop
 
-Add to your MCP client configuration:
-
-**For Perplexity Desktop:**
-Location: `~/Library/Application Support/Perplexity/perplexity-config.json` (macOS)
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "document-intelligence": {
       "command": "node",
-      "args": ["/path/to/mcp-document-intelligence/build/index.js"],
-      "env": {
-        "NODE_ENV": "production"
-      }
+      "args": ["/absolute/path/to/mcp-document-intelligence/build/server.js"]
     }
   }
 }
 ```
 
-**For Claude Desktop:**
-Location: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
+### 3. Optional: AI Classification
+
+Create `~/.mcp-doc-intel.json` for Perplexity AI support:
 
 ```json
 {
-  "mcpServers": {
-    "document-intelligence": {
-      "command": "node",
-      "args": ["/path/to/mcp-document-intelligence/build/index.js"],
-      "env": {
-        "NODE_ENV": "production"
-      }
-    }
-  }
+  "enableAI": true,
+  "perplexityApiKey": "pplx-xxxxxxxxxxxx"
 }
 ```
 
-**Restart your AI client** after updating the configuration.
+### 4. Optional: OCR (macOS)
 
-### MCP Filesystem Integration
-
-This server works best alongside the official [MCP Filesystem Server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem), which provides file browsing and management capabilities to your AI assistant.
-
-**Recommended Setup for Perplexity/Claude:**
-
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/path/to/your/documents"
-      ]
-    },
-    "document-intelligence": {
-      "command": "node",
-      "args": ["/path/to/mcp-document-intelligence/build/index.js"]
-    }
-  }
-}
+```bash
+brew install tesseract tesseract-lang poppler
 ```
 
-With both servers configured, you can:
-1. **Ask your AI** to find documents in your folders (filesystem server)
-2. **Analyze and organize** them automatically (document-intelligence server)
-3. **Complete workflow** handled by natural conversation with Perplexity/Claude
+## Tools
+
+### Core Analysis
+
+| Tool | Purpose |
+|---|---|
+| `scan_directory` | List documents with content preview |
+| `analyze_document` | Deep analysis: dates, references, keywords, AI classification |
+| `analyze_folder` | Batch analysis with duplicate detection and performance metrics |
+
+### File Operations
+
+| Tool | Purpose |
+|---|---|
+| `rename_document` | Safe rename with collision protection |
+| `move_document` | Move to target directory (auto-creates folder) |
+| `smart_rename` | AI-powered intelligent rename based on content |
+| `batch_organize` | Batch move/copy with backup |
+
+### Organization
+
+| Tool | Purpose |
+|---|---|
+| `auto_organize` | Autonomous folder organization (analyze + rename + move) |
+| `process_downloads` | Scan downloads and sort into archive |
+| `suggest_structure` | AI-generated folder structure recommendation |
+
+### Utilities
+
+| Tool | Purpose |
+|---|---|
+| `undo_operation` | Rollback last batch of operations |
+| `export_metadata` | Export to JSON or CSV |
+| `find_folder` | Fuzzy folder search with typo tolerance |
+
+## Architecture
+
+```
+src/
+├── server.ts        Main MCP server — 13 tools, request routing
+├── config.ts        Configuration management (~/.mcp-doc-intel.json)
+├── security.ts      ISO 25010 security module — validation, sanitization
+├── extractor.ts     Multi-format text extraction with OCR fallback
+├── ai-analysis.ts   Perplexity AI integration — classification, dates, keywords
+└── undo.ts          Operation tracking and rollback
+```
+
+### ISO 25010 Quality Model
+
+- **Functional Suitability** — Complete document lifecycle from scan to organize
+- **Performance Efficiency** — Lazy-loaded optional deps, batch processing, streaming
+- **Security** — Path traversal protection, input validation, API key masking, Unicode normalization
+- **Reliability** — Graceful OCR/AI degradation, undo/rollback, error isolation per file
+- **Maintainability** — Clean module separation, typed interfaces, zero circular deps
+
+## Configuration
+
+All settings in `~/.mcp-doc-intel.json`:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `ocrLanguage` | string | `"deu+eng"` | Tesseract language codes |
+| `ocrTimeout` | number | `30000` | OCR timeout in ms |
+| `maxFileSize` | number | `52428800` | Max file size (50 MB) |
+| `maxTextPreview` | number | `2000` | Text preview length |
+| `enableAI` | boolean | `false` | Enable Perplexity AI |
+| `perplexityApiKey` | string | `""` | Perplexity API key |
+| `perplexityModel` | string | `"sonar"` | Perplexity model |
+| `aiConfidenceThreshold` | number | `0.5` | Min AI confidence for rename |
+| `birthDate` | string | `""` | Birth date to exclude from detection |
+| `customCompanies` | string[] | `[]` | Additional company names for matching |
+
+## Supported Formats
+
+| Category | Extensions |
+|---|---|
+| Documents | `.pdf` `.docx` `.doc` `.pages` `.odt` `.rtf` `.txt` |
+| Images (OCR) | `.jpg` `.jpeg` `.png` `.tiff` `.bmp` |
+| Archives | `.zip` (text extraction from contained files) |
+
+## Requirements
+
+- **Node.js** 18+
+- **macOS** recommended (textutil fallback for DOC/RTF/Pages)
+- **Optional:** Tesseract + poppler for OCR
+- **Optional:** Perplexity API key for AI classification
+
+## License
+
+MIT
 
 ---
 
-## 📋 Available Tools
-
-### `analyze_document`
-
-Analyzes a single document and suggests an intelligent filename.
-
-**Input:**
-```json
-{
-  "filePath": "/path/to/document.pdf"
-}
-```
-
-**Output Example:**
-```json
-{
-  "originalFilename": "20240124_143045_scan.pdf",
-  "suggestedFilename": "20240124_143045_RE-2024-1234_rechnung_telekom.pdf",
-  "documentDate": "24.01.2024",
-  "references": ["RE-2024-1234"],
-  "keywords": ["rechnung", "telekom"],
-  "scannerDatePreserved": true,
-  "textLength": 2450,
-  "preview": "Rechnung Nr. RE-2024-1234..."
-}
-```
-
-### `analyze_folder` ✨ Enhanced in v4.0
-
-Analyzes ALL documents in a folder (batch processing with recursive scanning, duplicate detection, and filtering).
-
-**Input:**
-```json
-{
-  "folderPath": "/path/to/folder",
-  "recursive": true,
-  "fileTypes": ["invoice", "contract"],
-  "keywords": ["telekom", "vodafone"]
-}
-```
-
-**Output:**
-```json
-{
-  "folderPath": "/path/to/folder",
-  "totalFiles": 15,
-  "duplicateGroups": [
-    {
-      "hash": "abc123...",
-      "count": 3,
-      "files": ["doc1.pdf", "doc1_copy.pdf", "duplicate.pdf"]
-    }
-  ],
-  "documents": [
-    { 
-      "originalPath": "...", 
-      "suggestedFilename": "...", 
-      "ocrQuality": "good",
-      "confidence": 0.95,
-      "metadata": {...} 
-    }
-  ]
-}
-```
-
-### `suggest_folder_structure` ✨ NEW in v3.0
-
-Suggests intelligent folder organization based on analyzed documents.
-
-**Input:**
-```json
-{
-  "documents": [ /* array from analyze_folder */ ]
-}
-```
-
-### `auto_organize_folder` 🤖 NEW in v4.3
-
-Analyzes AND organizes a folder automatically - combines analysis + rename/move in one step.
-
-**Input:**
-```json
-{
-  "sourcePath": "/path/to/source",
-  "archivePath": "/path/to/archive",
-  "dryRun": false,
-  "createCategories": true,
-  "stateFile": "/tmp/state.json"
-}
-```
-
-**Output:**
-```json
-{
-  "total": 150,
-  "processed": 147,
-  "moved": 145,
-  "categorized": {
-    "01_Finanzen": 45,
-    "03_Gesundheit": 12,
-    "06_Reisen": 23,
-    "99_Sonstiges": 65
-  },
-  "errors": [{"file": "...", "error": "..."}]
-}
-```
-
-### `process_downloads` 📥 NEW in v4.3
-
-Scans Downloads folder and automatically files documents into archive with year and category detection.
-
-**Input:**
-```json
-{
-  "downloadsPath": "~/Downloads",
-  "archiveBasePath": "/path/to/archive",
-  "autoMove": false,
-  "maxFiles": 50
-}
-```
-
-**Output:**
-```json
-{
-  "scanned": 23,
-  "suggestions": [
-    {
-      "from": "~/Downloads/Rechnung.pdf",
-      "to": "/archive/Zwanziger/2025/01_Finanzen/2025-03-15_Rechnung_Telekom.pdf",
-      "year": 2025,
-      "category": "Finanzen"
-    }
-  ],
-  "filed": [],
-  "errors": []
-}
-```
-
-### `batch_organize_large` 🧩 NEW in v4.3
-
-Processes large folders (>100 files) in chunks with resume capability.
-
-**Input:**
-```json
-{
-  "folderPath": "/path/to/large/folder",
-  "targetArchivePath": "/path/to/archive",
-  "chunkSize": 50,
-  "stateFilePath": "/tmp/batch-state.json"
-}
-```
-
-**Output:**
-```json
-{
-  "chunkCompleted": true,
-  "totalFiles": 500,
-  "processedFiles": 50,
-  "successCount": 48,
-  "errorCount": 2,
-  "percentComplete": 10,
-  "nextChunkExists": true,
-  "stateFilePath": "/tmp/batch-state.json"
-}
-```
-
-**Output:**
-```json
-{
-  "structure": {
-    "2024": {
-      "Rechnungen": ["Telekom", "Vodafone"],
-      "Vertraege": ["..."]
-    }
-  },
-  "assignments": [
-    {
-      "originalPath": "/path/scan001.pdf",
-      "targetFolder": "2024/Rechnungen/Telekom",
-      "newFilename": "2024-01-24_RE-123_rechnung_telekom.pdf"
-    }
-  ]
-}
-```
-
-### `batch_organize` ✨ Enhanced in v4.0
-
-Executes batch renaming and moving/copying of files with automatic backup.
-
-**Input:**
-```json
-{
-  "baseFolder": "/path/to/organized",
-  "mode": "move",
-  "createBackup": true,
-  "operations": [
-    {
-      "originalPath": "/path/scan001.pdf",
-      "targetFolder": "2024/Rechnungen/Telekom",
-      "newFilename": "2024-01-24_RE-123_rechnung_telekom.pdf"
-    }
-  ]
-}
-```
-
-**Output:**
-```json
-{
-  "success": true,
-  "mode": "move",
-  "filesProcessed": 15,
-  "filesFailed": 0,
-  "foldersCreated": 5,
-  "backupCreated": true,
-  "backupPath": "/path/.backup_2024-01-24T10-30-00.json",
-  "results": [...]
-}
-```
-
-### `preview_organization` ✨ NEW in v4.0
-
-Shows a dry-run preview of what would happen without making changes.
-
-**Input:**
-```json
-{
-  "baseFolder": "/path/to/organized",
-  "operations": [ /* same as batch_organize */ ]
-}
-```
-
-**Output:**
-```json
-{
-  "preview": [
-    {
-      "action": "move",
-      "from": "/path/scan001.pdf",
-      "to": "/path/organized/2024/Rechnungen/Telekom/2024-01-24_RE-123.pdf",
-      "status": "ok"
-    }
-  ],
-  "warnings": [],
-  "stats": {
-    "totalFiles": 15,
-    "foldersToCreate": ["2024/Rechnungen/Telekom"],
-    "conflicts": 0,
-    "missingFiles": 0
-  },
-  "safeToExecute": true
-}
-```
-
-### `undo_last_organization` ✨ NEW in v4.0
-
-Restores the last organization operation from automatic backup.
-
-**Input:**
-```json
-{
-  "baseFolder": "/path/to/organized"
-}
-```
-
-**Output:**
-```json
-{
-  "success": true,
-  "restored": 15,
-  "failed": 0,
-  "backupFile": "/path/.backup_2024-01-24T10-30-00.json"
-}
-```
-
-### `export_metadata` ✨ NEW in v4.0
-
-Exports analyzed document metadata to JSON or CSV format.
-
-**Input:**
-```json
-{
-  "documents": [ /* array from analyze_folder */ ],
-  "format": "csv"
-}
-```
-
-**Output (CSV):**
-```csv
-Filename,Path,Date,References,Keywords,OCR Quality,Confidence,Type
-scan001.pdf,/path/scan001.pdf,24.01.2024,RE-2024-1234,rechnung;telekom,good,0.95,invoice
-...
-```
-
----
-
-## 🔧 Use Cases
-
-### Single Document Analysis
-```
-analyze_document with filePath: "/path/to/scanned_invoice.pdf"
-```
-→ Extracts invoice number, date, company name and suggests:
-`2024-01-24_INV-2024-001_rechnung_telekom.pdf`
-
-### Advanced Batch Organization (v4.0)
-
-**Example conversation with Perplexity or Claude:**
-
-```
-You: "Analyze all documents recursively in my 2026 folder, find duplicates"
-
-AI (using analyze_folder with recursive=true):
-   → Scanned 10 levels deep
-   → Found 150 documents
-   → Detected 12 duplicates (3 groups)
-   → Extracted: dates, invoice numbers, companies
-   → OCR quality: 95% confidence average
-
-AI (using suggest_folder_structure):
-   → Proposes: 2026/Rechnungen/Telekom, 2026/Vertraege/Vodafone, etc.
-   → Shows: Complete list of file renames and target folders
-
-AI (using preview_organization):
-   → Preview: 150 files will be moved
-   → Folders to create: 8
-   → Conflicts: 0
-   → Safe to execute: YES
-
-AI: "I found 150 documents (12 duplicates). Should I organize them into 
-     2026/Rechnungen, 2026/Vertraege with smart filenames?"
-
-You: "Yes, but copy instead of moving"
-
-AI (using batch_organize with mode="copy", createBackup=true):
-   → Copies all files (originals preserved)
-   → Creates folder structure
-   → Backup created for undo
-   → Processes everything automatically
-
-AI: "Done! Organized 150 documents, created 8 folders, backup saved.
-     15 files processed, 0 failed. Type 'undo' to revert."
-
-You: "Export the metadata as CSV"
-
-AI (using export_metadata with format="csv"):
-   → Exports all document metadata
-   → Includes: filename, date, references, keywords, OCR quality
-
-AI: "CSV exported with all metadata for 150 documents."
-```
-
-**Complete Workflow v4.0:**
-1. Scanner saves to "Inbox" folder
-2. Tell Perplexity/Claude to analyze recursively + find duplicates
-3. Preview changes before execution
-4. Confirm with copy or move mode
-5. Files auto-organized with automatic backup
-6. Export metadata for records
-7. Undo anytime if needed
-
-### Workflow Automation
-- **Before**: Manual sorting of 100+ scanned documents
-- **After**: One command → Preview → Organization in seconds
-- **Safety**: Automatic backups, preview mode, undo function
-- **Perfect for**: Tax documents, invoices, contracts, receipts, archives
-
----
-
-## 🛠️ Technical Details
-
-### Dependencies
-- **pdf-parse**: PDF text extraction
-- **mammoth**: DOCX document processing
-- **adm-zip**: Pages document extraction
-- **tesseract.js**: OCR for scanned documents and images
-- **@modelcontextprotocol/sdk**: MCP protocol implementation
-
-### File Structure
-```
-mcp-document-intelligence/
-├── src/
-│   └── index.ts          # Main server implementation
-├── build/                # Compiled output
-├── package.json
-├── tsconfig.json
-└── README.md
-```
-
-### Filename Pattern Recognition
-
-The analyzer recognizes:
-- **Scanner timestamps**: `YYYY-MM-DD_HH-MM-SS` or `YYYYMMDD_HHMMSS`
-- **Document dates**: `DD.MM.YYYY`, `YYYY-MM-DD`
-- **Reference patterns**:
-  - `Rechnungs-Nr: XXX` / `Invoice: XXX`
-  - `Kunden-Nr: XXX` / `Customer: XXX`
-  - `Bestell-Nr: XXX` / `Order: XXX`
-  - `Vertrag-Nr: XXX` / `Contract: XXX`
-- **Keywords**: Invoice, Contract, Offer, Order, common company names
-
-### Folder Structure Generation
-
-Automatically groups documents by:
-- **Year**: Extracted from document date
-- **Category**: Rechnungen, Verträge, Angebote, Mahnungen, etc.
-- **Company**: Telekom, Vodafone, Amazon, PayPal, Banks, etc.
-
----
-
-## 🔒 Privacy & Security
-
-- ✅ **All data stays local** - No external API calls for personal data
-- ✅ **OCR processing on-device** - Tesseract.js runs locally
-- ✅ **No data transmission** - All processing happens locally
-- ✅ **No logging of document content**
-
----
-
-## 🌍 Encoding & International Support
-
-- ✅ **Automatic Encoding Detection** - UTF-8 and Latin-1/ISO-8859-1
-- ✅ **International Characters** - Full Unicode support (日本語, 中文, العربية, עברית)
-- ✅ **German Umlauts** - Native support for äöüÄÖÜß
-- ✅ **Special Characters** - Handles pipes, colons, quotes in filenames
-- ✅ **Null-Byte Handling** - Automatically cleans corrupted files
-- ✅ **Encoding Info** - Reports detected encoding in analysis results
-
----
-
-## 🧪 Quality Assurance
-
-This project maintains high quality standards with comprehensive testing:
-
-- **100 Automated Tests** covering all functionality
-- **99% Test Pass Rate** (99/100 tests passing)
-- **ISO 25010 Compliant** - Quality characteristics validated
-- **Performance Benchmarks** - <100ms per file average
-- **Security Tested** - Path traversal and data privacy verified
-
-See [TEST-DOCUMENTATION.md](TEST-DOCUMENTATION.md) for detailed test coverage and results.
-
----
-
-## 🚀 Roadmap
-
-- [x] Multi-format document support (PDF, DOCX, Pages, Images, TXT)
-- [x] Batch processing support
-- [x] Auto-filing to folders based on content
-- [x] Recursive folder scanning
-- [x] Duplicate detection with SHA256
-- [x] Preview mode (dry-run)
-- [x] Backup & Undo functionality
-- [x] Metadata export (JSON/CSV)
-- [x] Copy vs Move modes
-- [x] OCR quality feedback
-- [ ] Configurable naming templates
-- [ ] Custom reference number patterns
-- [ ] Excel/CSV document support
-- [ ] Integration with document management systems
-- [ ] Machine learning for improved categorization
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file
-
----
-
-## 🙏 Acknowledgments
-
-- Built with [Model Context Protocol SDK](https://github.com/modelcontextprotocol)
-- Inspired by and based on concepts from [MCP Filesystem Server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem)
-- PDF parsing by [pdf-parse](https://www.npmjs.com/package/pdf-parse)
-- OCR by [Tesseract.js](https://tesseract.projectnaptha.com/)
-
----
-
-**Made for intelligent document workflows** 📄✨
+*Built with the Model Context Protocol SDK*
