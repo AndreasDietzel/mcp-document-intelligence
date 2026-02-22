@@ -665,17 +665,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         if (mode === "move") {
           const backupPath = path.join(baseFolder, `.backup_${Date.now()}.json`);
-          const backupData = ops.map((op) => ({
-            from: op.originalPath,
-            to: path.join(baseFolder, op.targetFolder, op.newFilename),
-          }));
+          const backupData = ops.map((op) => {
+            const tFolder = normPath(op.targetFolder);
+            const tDir = path.isAbsolute(tFolder) ? tFolder : path.join(baseFolder, tFolder);
+            return { from: op.originalPath, to: path.join(tDir, op.newFilename) };
+          });
           fs.mkdirSync(baseFolder, { recursive: true });
           fs.writeFileSync(backupPath, JSON.stringify({ operations: backupData }, null, 2));
         }
 
         for (const op of ops) {
           try {
-            const targetDir = path.join(baseFolder, op.targetFolder);
+            const tFolder = normPath(op.targetFolder);
+            const targetDir = path.isAbsolute(tFolder) ? tFolder : path.join(baseFolder, tFolder);
             const targetPath = path.join(targetDir, op.newFilename);
             if (!fs.existsSync(targetDir)) { fs.mkdirSync(targetDir, { recursive: true }); foldersCreated++; }
             if (!fs.existsSync(op.originalPath)) { errors.push({ op, error: "Source not found" }); continue; }
