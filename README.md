@@ -1,10 +1,31 @@
+```text
++--------------------------------------------------------------------------------+
+|                                                                                |
+|  __  __  ____ ____        ____                                _                |
+| |  \/  |/ ___|  _ \      |  _ \  ___   ___ _   _ _ __ ___   | |_ ___          |
+| | |\/| | |   | |_) |_____| | | |/ _ \ / __| | | | '_ ` _ \  | __/ _ \         |
+| | |  | | |___|  __/_____| |_| | (_) | (__| |_| | | | | | | | ||  __/         |
+| |_|  |_|\____|_|        |____/ \___/ \___|\__,_|_| |_| |_|  \__\___|         |
+|                                                                                |
+|      ____       _       _ _ _                       _                          |
+|     |_ _|_ __  | |_ ___| | (_) __ _  ___ _ __   ___| |                         |
+|      | || '_ \ | __/ _ \ | | |/ _` |/ _ \ '_ \ / __| |                         |
+|      | || | | || ||  __/ | | | (_| |  __/ | | | (__| |                         |
+|     |___|_| |_| \__\___|_|_|_|\__, |\___|_| |_|\___|_|                         |
+|                                |___/                                           |
+|                                                                                |
+|              MCP SERVER  |  OCR  |  ANALYZE  |  ORGANIZE                       |
+|                                                                                |
++--------------------------------------------------------------------------------+
+```
+
 # MCP Document Intelligence Server
 
 **Model Context Protocol Server with Advanced Batch Processing & Intelligent Document Organization**
 
-🎯 **Designed for [Perplexity Desktop](https://www.perplexity.ai/) and [Claude Desktop](https://claude.ai/download)** – Supercharge your AI assistant with enterprise-grade document intelligence.
+🎯 **Built for [Perplexity Desktop](https://www.perplexity.ai/), [Claude Desktop](https://claude.ai/download), and other MCP-compatible clients** – Supercharge your AI assistant with enterprise-grade document intelligence.
 
-Fully automated document intelligence with advanced batch processing: Recursively scan folders, detect duplicates, extract metadata from PDFs, DOCX, Pages, images and text files (with OCR for scanned documents), preview changes before execution, backup/undo operations, export metadata, and automatically organize documents with intelligent folder structures.
+This MCP server analyzes, renames, categorizes, and organizes documents through natural-language requests in your AI client. It scans folders recursively, detects duplicates, extracts metadata from PDFs, DOCX, Pages, images, and text files, and uses OCR for scanned documents. Preview mode, backups, undo support, metadata export, and memory-optimized batch processing make it practical for large personal archives. The result is an AI-driven document workflow that stays local, fast, and automatable.
 
 [![MCP](https://img.shields.io/badge/MCP-1.0.4-blue)](https://github.com/modelcontextprotocol)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

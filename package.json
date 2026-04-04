@@ -1,7 +1,7 @@
 {
   "name": "mcp-document-intelligence",
   "version": "4.6.0",
-  "description": "MCP Server with automatic OCR integration, memory-optimized processing, intelligent categorization, and comprehensive document analysis",
+  "description": "MCP document intelligence server for Claude, Perplexity, and other MCP-compatible clients with OCR and smart organization",
   "type": "module",
   "main": "build/index.js",
   "bin": {
